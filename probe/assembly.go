@@ -167,8 +167,9 @@ func (b *bidi) run() {
 			if ok := b.lastPacketSeen.Before(b.b.r.Seen()); !ok {
 				// an expired or sub response packet.
 				glog.V(5).Infof("[worker %v] found a useless packet", b.wid)
+			} else {
+				b.lastPacketSeen = b.b.r.Seen()
 			}
-			b.lastPacketSeen = b.b.r.Seen()
 			// if there is a request waitting, this packet is possible the first packet of response.
 			if waitting {
 				// fill report data.
