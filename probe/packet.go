@@ -87,7 +87,7 @@ var StmtParsedError = errors.New("sql statemnet parsed failed")
 var NotQueryError = errors.New("not a query")
 var PacketError = errors.New("not a mysql packet")
 
-// TODO: full error message
+// TODO: full error message.
 func (p *MysqlResponsePacket) Err() error {
 	if p.flag == iERR {
 		return ProcessError
@@ -137,7 +137,7 @@ func (p *MysqlBasePacket) ParseResponsePacket() (*MysqlResponsePacket, error) {
 		return nil, NotEnouthDataError
 	}
 	packet := &MysqlResponsePacket{seq: p.Seq, flag: p.Data[0]}
-	// packet OK
+	// packet OK.
 	if len(p.Data) > 1 {
 		packet.body = p.Data[1:]
 	}

@@ -15,13 +15,13 @@ import (
 type Probe struct {
 	device    string
 	snapLen   int32
-	port      uint16 // probe port.
 	localIPs  []string
+	port      uint16         // probe port.
 	filter    string         // bpf filter.
 	inited    bool           // flag if could be run.
 	workers   []*ProbeWorker // probe worker group processing packet.
 	workerNum int            // worker number.
-	out       chan *Message  // data collect channel
+	out       chan *Message  // data collect channel.
 }
 
 func NewProbe(device string, snapLen int32, port uint16, workerNum int) *Probe {
@@ -31,7 +31,7 @@ func NewProbe(device string, snapLen int32, port uint16, workerNum int) *Probe {
 		port:      port,
 		inited:    false,
 		workerNum: workerNum,
-		out: make(chan *Message),
+		out:       make(chan *Message),
 	}
 	return p
 }
@@ -72,7 +72,7 @@ func (p *Probe) String() string {
 }
 
 func (p *Probe) Run() {
-	// create workers
+	// create workers.
 	if !p.inited {
 		glog.Fatal("probe not inited")
 		return
@@ -84,7 +84,7 @@ func (p *Probe) Run() {
 		p.workers = append(p.workers, w)
 	}
 
-	// run
+	// run probe.
 	handle, err := pcap.OpenLive(p.device, p.snapLen, true, pcap.BlockForever)
 	if err != nil {
 		glog.Fatalf("pcap open live failed: %v", err)
@@ -101,9 +101,8 @@ func (p *Probe) Run() {
 			glog.Warning("unexpected packet")
 			continue
 		}
-		// dispatch packet by stream network flow
+		// dispatch packet by stream network flow.
 		id := int(packet.NetworkLayer().NetworkFlow().FastHash() % uint64(p.workerNum))
 		p.workers[id].in <- packet
 	}
-	glog.Warning("probe exit")
 }

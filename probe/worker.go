@@ -2,8 +2,8 @@ package probe
 
 import (
 	"encoding/binary"
-	"time"
 	"math/rand"
+	"time"
 
 	"github.com/golang/glog"
 	"github.com/google/gopacket"
@@ -12,12 +12,12 @@ import (
 )
 
 type ProbeWorker struct {
-	owner        *Probe               // owner
-	in           chan gopacket.Packet // input channel
-	out          chan *Message        // output channel
-	id           int                  // worker id
-	logAllPacket bool                 // wether to log the paocket
-	interval     time.Duration        // flush interval
+	owner        *Probe               // owner.
+	in           chan gopacket.Packet // input channel.
+	out          chan *Message        // output channel.
+	id           int                  // worker id.
+	logAllPacket bool                 // wether to log the paocket.
+	interval     time.Duration        // flush interval.
 }
 
 func NewProbeWorker(prbe *Probe, out chan *Message, id int, interval time.Duration, logAllPacket bool) *ProbeWorker {
@@ -47,7 +47,7 @@ func (w *ProbeWorker) Run() {
 	assembler.MaxBufferedPagesPerConnection = 1000
 
 	// padding for broken symmetry.
-	padding := time.Millisecond * time.Duration(rand.Int() * w.id % 500)
+	padding := time.Millisecond * time.Duration(rand.Int()*w.id%500)
 	ticker := time.Tick(w.interval + padding)
 	count := 0
 	glog.Infof("[worker %v] init done, ticker: %v", w.id, w.interval+padding)

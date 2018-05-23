@@ -23,10 +23,10 @@ func (k Key) String() string {
 type MysqlStream struct {
 	bidi   *bidi            // maps to the bidirectional twin.
 	r      ReaderStream     // low level stream for tcpassembly
-	c      chan MysqlPacket // output channel
+	c      chan MysqlPacket // output channel.
 	stop   chan struct{}    // channel to stop stream.
 	done   bool             // flag parsed success.
-	client bool             // ture if it is a requeset stream
+	client bool             // ture if it is a requeset stream.
 }
 
 func NewMysqlStream(bidi *bidi, client bool) *MysqlStream {
@@ -85,7 +85,7 @@ func (s *MysqlStream) run() {
 				glog.V(5).Infof("[worker %v] parse packet error: %v, ignored packet: %v", s.bidi.wid, err, base.Data)
 			} else {
 				glog.V(8).Infof("[woker %v] parse packet done, client: %v, data: %v", s.bidi.wid, s.client, base.Data)
-				// report to bidi or wait to exit
+				// report to bidi or wait to exit.
 				select {
 				case <-s.stop:
 					return
@@ -104,8 +104,8 @@ type bidi struct {
 	req            chan MysqlPacket // channel to receive request packet.
 	rsp            chan MysqlPacket // channel to receive response packet.
 	stop           chan struct{}    // channel to stop stream a, b.
-	stopped        bool             // if is shutdown
-	wid            int              // worker id for log
+	stopped        bool             // if is shutdown.
+	wid            int              // worker id for log.
 	sync.Mutex
 }
 
@@ -129,7 +129,7 @@ func (b *bidi) shutdown() {
 
 	if !b.stopped {
 		b.stopped = true
-		// b.a shuld not be null, just in case
+		// b.a shuld not be null, just in case.
 		if b.a != nil {
 			close(b.a.c)
 		}
@@ -143,8 +143,8 @@ func (b *bidi) shutdown() {
 func (b *bidi) run() {
 	var msg *Message
 	waitting := false // flag true if there is a request waitting for response.
-	// compare the timestamp of request and response
-	// TODO: wrap packet with timestamp
+	// compare the timestamp of request and response.
+	// TODO: wrap packet with timestamp.
 	for {
 		select {
 		case reqPacket := <-b.req:
@@ -175,7 +175,7 @@ func (b *bidi) run() {
 				// fill report data.
 				msg.TimestampRsp = b.b.r.Seen()
 				msg.Err = rspPacket.Err()
-				// report
+				// report.
 				b.out <- msg
 				waitting = false
 				glog.V(5).Infof("[worker %v] mysql query parsed done: %v", msg, b.wid)
@@ -191,8 +191,8 @@ type IsRequest func(netFlow, tcpFlow gopacket.Flow) bool
 type BidiFactory struct {
 	bidiMap   map[Key]*bidi // bidiMap maps keys to bidirectional stream pairs.
 	out       chan *Message // channle to report message.
-	isRequest IsRequest     // check if it is a request stream
-	wid       int           // worker id for log
+	isRequest IsRequest     // check if it is a request stream.
+	wid       int           // worker id for log.
 }
 
 // New handles creating a new tcpassembly.Stream. Must be sure the bidi.a is a client stream.
