@@ -153,7 +153,6 @@ func (b *bidi) run() {
 			if b.lastPacketSeen.Before(b.a.r.Seen()) {
 				b.lastPacketSeen = b.a.r.Seen()
 			}
-			b.lastPacketSeen = b.a.r.Seen()
 			// create report data.
 			waitting = true
 			msg = &Message{
