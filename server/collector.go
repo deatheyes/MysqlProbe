@@ -97,10 +97,10 @@ func (c *Collector) Run() {
 				close(client.send)
 			}
 		case r := <-c.reportIn:
-			// merge collected reports
+			// merge collected reports, used by master and standby master
 			report.Merge(r)
 		case m := <-c.messageIn:
-			// merge collected messages
+			// merge collected messages, used by slave
 			report.AddMessage(m)
 		case <-ticker.C:
 			// report and flush merged message
