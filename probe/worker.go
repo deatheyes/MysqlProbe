@@ -9,18 +9,20 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/tcpassembly"
+
+	"github.com/yanyu/MysqlProbe/message"
 )
 
 type ProbeWorker struct {
-	owner        *Probe               // owner.
-	in           chan gopacket.Packet // input channel.
-	out          chan *Message        // output channel.
-	id           int                  // worker id.
-	logAllPacket bool                 // wether to log the paocket.
-	interval     time.Duration        // flush interval.
+	owner        *Probe                // owner.
+	in           chan gopacket.Packet  // input channel.
+	out          chan *message.Message // output channel.
+	id           int                   // worker id.
+	logAllPacket bool                  // wether to log the paocket.
+	interval     time.Duration         // flush interval.
 }
 
-func NewProbeWorker(prbe *Probe, out chan *Message, id int, interval time.Duration, logAllPacket bool) *ProbeWorker {
+func NewProbeWorker(prbe *Probe, out chan *message.Message, id int, interval time.Duration, logAllPacket bool) *ProbeWorker {
 	p := &ProbeWorker{
 		owner:        prbe,
 		in:           make(chan gopacket.Packet),

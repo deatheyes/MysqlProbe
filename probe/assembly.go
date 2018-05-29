@@ -10,6 +10,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/tcpassembly"
+
+	"github.com/yanyu/MysqlProbe/message"
 )
 
 type Key struct {
@@ -97,19 +99,19 @@ func (s *MysqlStream) run() {
 }
 
 type bidi struct {
-	key            Key              // Key of the first stream, mostly for logging.
-	a, b           *MysqlStream     // the two bidirectional streams.
-	lastPacketSeen time.Time        // last time we saw a packet from either stream.
-	out            chan *Message    // channel to report message, copy from bidi factory.
-	req            chan MysqlPacket // channel to receive request packet.
-	rsp            chan MysqlPacket // channel to receive response packet.
-	stop           chan struct{}    // channel to stop stream a, b.
-	stopped        bool             // if is shutdown.
-	wid            int              // worker id for log.
+	key            Key                   // Key of the first stream, mostly for logging.
+	a, b           *MysqlStream          // the two bidirectional streams.
+	lastPacketSeen time.Time             // last time we saw a packet from either stream.
+	out            chan *message.Message // channel to report message, copy from bidi factory.
+	req            chan MysqlPacket      // channel to receive request packet.
+	rsp            chan MysqlPacket      // channel to receive response packet.
+	stop           chan struct{}         // channel to stop stream a, b.
+	stopped        bool                  // if is shutdown.
+	wid            int                   // worker id for log.
 	sync.Mutex
 }
 
-func Newbidi(key Key, out chan *Message, wid int) *bidi {
+func Newbidi(key Key, out chan *message.Message, wid int) *bidi {
 	b := &bidi{
 		key:     key,
 		req:     make(chan MysqlPacket),
@@ -141,7 +143,7 @@ func (b *bidi) shutdown() {
 }
 
 func (b *bidi) run() {
-	var msg *Message
+	var msg *message.Message
 	waitting := false // flag true if there is a request waitting for response.
 	// compare the timestamp of request and response.
 	// TODO: wrap packet with timestamp.
@@ -155,7 +157,7 @@ func (b *bidi) run() {
 			}
 			// create report data.
 			waitting = true
-			msg = &Message{
+			msg = &message.Message{
 				Sql:          generateQuery(reqPacket.Stmt(), true),
 				TimestampReq: b.a.r.Seen(),
 			}
@@ -174,7 +176,11 @@ func (b *bidi) run() {
 			if waitting {
 				// fill report data.
 				msg.TimestampRsp = b.b.r.Seen()
-				msg.Err = rspPacket.Err()
+				if rspPacket.Err() != nil {
+					msg.Err = true
+				} else {
+					msg.Err = false
+				}
 				// report.
 				b.out <- msg
 				waitting = false
@@ -189,10 +195,10 @@ func (b *bidi) run() {
 type IsRequest func(netFlow, tcpFlow gopacket.Flow) bool
 
 type BidiFactory struct {
-	bidiMap   map[Key]*bidi // bidiMap maps keys to bidirectional stream pairs.
-	out       chan *Message // channle to report message.
-	isRequest IsRequest     // check if it is a request stream.
-	wid       int           // worker id for log.
+	bidiMap   map[Key]*bidi         // bidiMap maps keys to bidirectional stream pairs.
+	out       chan *message.Message // channle to report message.
+	isRequest IsRequest             // check if it is a request stream.
+	wid       int                   // worker id for log.
 }
 
 // New handles creating a new tcpassembly.Stream. Must be sure the bidi.a is a client stream.

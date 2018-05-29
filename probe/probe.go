@@ -8,6 +8,8 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
+
+	"github.com/yanyu/MysqlProbe/message"
 	"github.com/yanyu/MysqlProbe/util"
 )
 
@@ -16,12 +18,12 @@ type Probe struct {
 	device    string
 	snapLen   int32
 	localIPs  []string
-	port      uint16         // probe port.
-	filter    string         // bpf filter.
-	inited    bool           // flag if could be run.
-	workers   []*ProbeWorker // probe worker group processing packet.
-	workerNum int            // worker number.
-	out       chan *Message  // data collect channel.
+	port      uint16                // probe port.
+	filter    string                // bpf filter.
+	inited    bool                  // flag if could be run.
+	workers   []*ProbeWorker        // probe worker group processing packet.
+	workerNum int                   // worker number.
+	out       chan *message.Message // data collect channel.
 }
 
 func NewProbe(device string, snapLen int32, port uint16, workerNum int) *Probe {
@@ -31,12 +33,12 @@ func NewProbe(device string, snapLen int32, port uint16, workerNum int) *Probe {
 		port:      port,
 		inited:    false,
 		workerNum: workerNum,
-		out:       make(chan *Message),
+		out:       make(chan *message.Message),
 	}
 	return p
 }
 
-func (p *Probe) Out() <-chan *Message {
+func (p *Probe) Out() <-chan *message.Message {
 	return p.out
 }
 

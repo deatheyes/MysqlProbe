@@ -5,8 +5,12 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/yanyu/MysqlProbe/probe"
+	"github.com/yanyu/MysqlProbe/server"
+	"github.com/yanyu/MsqlProbe/cluster"
 )
 
+/*
+// probe test
 func main() {
 	flag.Parse()
 
@@ -23,3 +27,4 @@ func main() {
 		glog.Infof("get message: %v", msg.Sql)
 	}
 }
+*/
