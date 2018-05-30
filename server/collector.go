@@ -119,11 +119,6 @@ func (c *Collector) innerupdate() {
 	}
 }
 
-// periodicily update cluster info in case of missed out node
-func (c *Collector) update() {
-	// TODO: diff the cluster nodes, register the new connection and reactive to the stop channel
-}
-
 func (c *Collector) Stop() {
 	c.Lock()
 	defer c.Unlock()
@@ -161,7 +156,7 @@ func (c *Collector) ProcessData(data []byte) {
 
 func (c *Collector) Run() {
 	glog.V(8).Info("collector start...")
-	// TODO: go update()
+	go c.innerupdate()
 
 	report := &message.Report{}
 	ticker := time.NewTicker(c.reportPeriod)
@@ -189,6 +184,7 @@ func (c *Collector) Run() {
 				} else {
 					c.report <- data
 				}
+				report = &message.Report{}
 			}
 		case <-c.stop:
 			// stop the collector
