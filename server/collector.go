@@ -28,7 +28,7 @@ type Collector struct {
 	unregister        chan *Client          // client unregister channel
 	registerAddr      chan string           // cluster node register channel
 	unregisterAddr    chan string           // cluster node unregister channel
-	rejectConnection  chan bool             // notify to unregist all the connection
+	rejectConnection  chan bool             // notify to unregister all the connection
 	reportPeriod      time.Duration         // period to report and flush merged message
 	shutdown          bool                  // ture if already stoppted
 	disableConnection bool                  // true if disable to accept connection
@@ -98,6 +98,7 @@ func (c *Collector) innerupdate() {
 			if client := c.clientAddrs[addr]; client != nil {
 				glog.V(5).Infof("collector removes node: %v", addr)
 				c.unregister <- client
+				delete(c.clientAddrs, addr)
 			} else {
 				glog.V(5).Infof("collector cannot remove node %v as it is not in the cluster", addr)
 			}
