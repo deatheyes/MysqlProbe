@@ -99,19 +99,19 @@ func (s *MysqlStream) run() {
 }
 
 type bidi struct {
-	key            Key                   // Key of the first stream, mostly for logging.
-	a, b           *MysqlStream          // the two bidirectional streams.
-	lastPacketSeen time.Time             // last time we saw a packet from either stream.
-	out            chan *message.Message // channel to report message, copy from bidi factory.
-	req            chan MysqlPacket      // channel to receive request packet.
-	rsp            chan MysqlPacket      // channel to receive response packet.
-	stop           chan struct{}         // channel to stop stream a, b.
-	stopped        bool                  // if is shutdown.
-	wid            int                   // worker id for log.
+	key            Key                     // Key of the first stream, mostly for logging.
+	a, b           *MysqlStream            // the two bidirectional streams.
+	lastPacketSeen time.Time               // last time we saw a packet from either stream.
+	out            chan<- *message.Message // channel to report message, copy from bidi factory.
+	req            chan MysqlPacket        // channel to receive request packet.
+	rsp            chan MysqlPacket        // channel to receive response packet.
+	stop           chan struct{}           // channel to stop stream a, b.
+	stopped        bool                    // if is shutdown.
+	wid            int                     // worker id for log.
 	sync.Mutex
 }
 
-func Newbidi(key Key, out chan *message.Message, wid int) *bidi {
+func Newbidi(key Key, out chan<- *message.Message, wid int) *bidi {
 	b := &bidi{
 		key:     key,
 		req:     make(chan MysqlPacket),
@@ -195,10 +195,10 @@ func (b *bidi) run() {
 type IsRequest func(netFlow, tcpFlow gopacket.Flow) bool
 
 type BidiFactory struct {
-	bidiMap   map[Key]*bidi         // bidiMap maps keys to bidirectional stream pairs.
-	out       chan *message.Message // channle to report message.
-	isRequest IsRequest             // check if it is a request stream.
-	wid       int                   // worker id for log.
+	bidiMap   map[Key]*bidi           // bidiMap maps keys to bidirectional stream pairs.
+	out       chan<- *message.Message // channle to report message.
+	isRequest IsRequest               // check if it is a request stream.
+	wid       int                     // worker id for log.
 }
 
 // New handles creating a new tcpassembly.Stream. Must be sure the bidi.a is a client stream.

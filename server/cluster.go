@@ -30,7 +30,7 @@ func (d *CollectorClusterDelegate) NotifyMyRoleChanged(oldRole string, newRole s
 	}
 }
 
-func (d *CollectorClusterDelegate) NotifyJion(node *cluster.Node) {
+func (d *CollectorClusterDelegate) NotifyJoin(node *cluster.Node) {
 	// we are only concerned about the slave join, and only master will react to it
 	glog.V(5).Infof("new node join: %s", node)
 	if node.Role == "slave" && d.role == "master" {

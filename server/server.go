@@ -7,30 +7,18 @@ import (
 	"github.com/golang/glog"
 )
 
-const (
-	modeMaster = iota
-	modeStandby
-	modeSlave
-)
-
 type Server struct {
-	mode       int         // server mode
 	dispatcher *Dispatcher // dispatcher to serve the client
 	collector  *Collector  // collector to gather message
-	control    chan int    // control channel
 	addr       string      // server addr
 }
 
-// TODO: load config
-func NewServer(mode int, addr string) *Server {
+func NewServer(addr string, slave bool, interval uint16) *Server {
 	s := &Server{
-		mode:       mode,
-		control:    make(chan int),
 		dispatcher: NewDispatcher(),
 		addr:       addr,
 	}
-	// TODO: load flush period from config
-	s.collector = NewCollector(s.dispatcher.In(), 5*time.Second, false)
+	s.collector = NewCollector(s.dispatcher.In(), time.Duration(interval)*time.Second, slave)
 	return s
 }
 

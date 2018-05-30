@@ -1,8 +1,8 @@
 package message
 
 import (
-	"time"
 	"encoding/json"
+	"time"
 )
 
 type Message struct {
@@ -53,7 +53,7 @@ func (g *MessageGroup) Merge(ag *MessageGroup) {
 
 // data reported to master or user
 type Report struct {
-	Groups map[string]*MessageGroup `json:"messages"`
+	Groups map[string]*MessageGroup `json:"groups"`
 }
 
 func (r *Report) AddMessage(m *Message) {
@@ -101,7 +101,6 @@ func (r *Report) Merge(ar *Report) {
 		}
 	}
 }
-
 
 func DecodeReportFromBytes(data []byte) (*Report, error) {
 	r := &Report{}
