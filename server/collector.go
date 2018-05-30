@@ -159,7 +159,7 @@ func (c *Collector) Run() {
 	glog.V(8).Info("collector start...")
 	go c.innerupdate()
 
-	report := &message.Report{}
+	report := message.NewReport()
 	ticker := time.NewTicker(c.reportPeriod)
 	defer ticker.Stop()
 	for {
@@ -185,7 +185,7 @@ func (c *Collector) Run() {
 				} else {
 					c.report <- data
 				}
-				report = &message.Report{}
+				report = message.NewReport()
 			}
 		case <-c.stop:
 			// stop the collector

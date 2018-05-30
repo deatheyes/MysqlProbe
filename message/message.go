@@ -56,6 +56,10 @@ type Report struct {
 	Groups map[string]*MessageGroup `json:"groups"`
 }
 
+func NewReport() *Report {
+	return &Report{Groups: make(map[string]*MessageGroup)}
+}
+
 func (r *Report) AddMessage(m *Message) {
 	g := r.Groups[m.Sql]
 	cost := m.TimestampRsp.Sub(m.TimestampReq).Nanoseconds() / 1000000
