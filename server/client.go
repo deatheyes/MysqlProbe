@@ -23,6 +23,7 @@ type Client struct {
 	hub  Hub             // hub to register this client
 	conn *websocket.Conn // websocket connection
 	send chan []byte     // channel of outbound messages
+	addr string          // client address
 }
 
 func (c *Client) writePump() {

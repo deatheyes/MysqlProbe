@@ -14,23 +14,23 @@ const (
 )
 
 type Server struct {
-	mode int                // server mode
-	dispatcher *Dispatcher  // dispatcher to serve the client
-	collector *Collector    // collector to gather message
-	control chan int        // control channel
-	addr string             // server addr
+	mode       int         // server mode
+	dispatcher *Dispatcher // dispatcher to serve the client
+	collector  *Collector  // collector to gather message
+	control    chan int    // control channel
+	addr       string      // server addr
 }
 
 // TODO: load config
 func NewServer(mode int, addr string) *Server {
 	s := &Server{
-		mode: mode,
-		control: make(chan int),
+		mode:       mode,
+		control:    make(chan int),
 		dispatcher: NewDispatcher(),
-		addr: addr,
+		addr:       addr,
 	}
 	// TODO: load flush period from config
-	s.collector = NewCollector(s.dispatcher.In(), 5 * time.Second)
+	s.collector = NewCollector(s.dispatcher.In(), 5*time.Second, false)
 	return s
 }
 

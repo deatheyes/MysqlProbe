@@ -4,5 +4,5 @@ import (
 	"time"
 )
 
-var joinRetryInterval = time.Second * 5
-var refreshSeedInterval = time.Minute
+var joinRetryInterval = 5 * time.Second
+var refreshSeedInterval = 30 * time.Second

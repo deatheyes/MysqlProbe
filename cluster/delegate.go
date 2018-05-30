@@ -13,7 +13,7 @@ func NewEventDelegate(cluster *Cluster) *eventDelegate {
 }
 
 func (d *eventDelegate) NotifyJoin(node *memberlist.Node) {
-	d.cluster.processStatusChange(node)
+	d.cluster.processStatusChange(node, true)
 }
 
 func (d *eventDelegate) NotifyLeave(node *memberlist.Node) {
@@ -21,7 +21,7 @@ func (d *eventDelegate) NotifyLeave(node *memberlist.Node) {
 }
 
 func (d *eventDelegate) NotifyUpdate(node *memberlist.Node) {
-	d.cluster.processStatusChange(node)
+	d.cluster.processStatusChange(node, false)
 }
 
 type aliveDelegate struct {

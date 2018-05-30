@@ -11,6 +11,39 @@ import (
 	"sync"
 )
 
+// outbound node info
+type Node struct {
+	Addr string
+	Role string
+}
+
+func NewNode(addr string, role byte) *Node {
+	n := &Node{Addr: addr}
+	switch role {
+	case slave:
+		n.Role = "slave"
+	case master:
+		n.Role = "master"
+	case standby:
+		n.Role = "standby"
+	default:
+		n.Role = "unknown"
+	}
+	return n
+}
+
+func (n *Node) String() string {
+	return fmt.Sprintf("Addr: %s, Role: %s", n.Addr, n.Role)
+}
+
+type ClusterDelegate interface {
+	NotifyMyRoleChanged(oldRole string, newRole string)
+	NotifyJoin(node *Node)
+	NotifyUpdate(node *Node)
+	NotifyLeave(node *Node)
+	NotifyRefresh(nodes []*Node)
+}
+
 type Cluster struct {
 	inited     bool // flag true if cluster could run
 	list       *memberlist.Memberlist
@@ -20,15 +53,17 @@ type Cluster struct {
 	masterName string             // master name
 	config     *memberlist.Config // memberlist config
 	group      string             // cluster name
+	Delegate   ClusterDelegate    // callbacks for cluster action
 	sync.Mutex
 }
 
-func NewCluster(isMaster bool, seed []string, group string) *Cluster {
+func NewCluster(isMaster bool, seed []string, group string, d ClusterDelegate) *Cluster {
 	return &Cluster{
 		inited:   false,
 		seed:     seed,
 		isMaster: isMaster,
 		group:    group,
+		Delegate: d,
 	}
 }
 
@@ -91,18 +126,26 @@ func (c *Cluster) Run() {
 	for {
 		<-ticker
 		glog.V(8).Infof("refresh seed")
-		var newSeed []string
+		var newNodes []*Node
 		for _, member := range c.list.Members() {
-			newSeed = append(newSeed, member.Addr.String())
+			meta := &MetaMessage{}
+			if err := meta.DecodeFromBytes(member.Meta); err != nil {
+				glog.Warningf("decode node meta failed: %v", err)
+				continue
+			}
+			n := NewNode(member.Addr.String(), meta.Role)
+			newNodes = append(newNodes, n)
 		}
-		if len(newSeed) != 0 {
+		if c.Delegate != nil {
+			c.Delegate.NotifyRefresh(newNodes)
+		}
+		if len(newNodes) != 0 {
 			// TODO: diff and flush to disk
-			c.seed = newSeed
 		}
 	}
 }
 
-func (c *Cluster) processStatusChange(node *memberlist.Node) {
+func (c *Cluster) processStatusChange(node *memberlist.Node, join bool) {
 	meta := &MetaMessage{}
 	if err := meta.DecodeFromBytes(node.Meta); err != nil {
 		return
@@ -110,6 +153,15 @@ func (c *Cluster) processStatusChange(node *memberlist.Node) {
 
 	c.Lock()
 	defer c.Unlock()
+
+	n := NewNode(node.Addr.String(), meta.Role)
+	if c.Delegate != nil {
+		if join {
+			c.Delegate.NotifyJoin(n)
+		} else {
+			c.Delegate.NotifyUpdate(n)
+		}
+	}
 
 	if meta.Role == master {
 		// check if need to update status
@@ -119,6 +171,9 @@ func (c *Cluster) processStatusChange(node *memberlist.Node) {
 			if c.meta.Role == master {
 				// switch to standby
 				c.meta.Role = standby
+				if c.Delegate != nil {
+					c.Delegate.NotifyMyRoleChanged("master", "standby")
+				}
 			}
 		}
 	}
@@ -133,6 +188,11 @@ func (c *Cluster) processLeave(node *memberlist.Node) {
 	c.Lock()
 	defer c.Unlock()
 
+	n := NewNode(node.Addr.String(), meta.Role)
+	if c.Delegate != nil {
+		c.Delegate.NotifyLeave(n)
+	}
+
 	if meta.Role == master {
 		// check if need an election, only standby could start an election.
 		if c.masterName == node.Name {
@@ -142,6 +202,9 @@ func (c *Cluster) processLeave(node *memberlist.Node) {
 				c.meta.Epic++
 				c.meta.Role = master
 				// TODO: start the colloctor.
+				if c.Delegate != nil {
+					c.Delegate.NotifyMyRoleChanged("standby", "master")
+				}
 			}
 		}
 	}

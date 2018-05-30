@@ -1,10 +1,13 @@
 package server
 
 import (
+	"net/url"
 	"sync"
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/gorilla/websocket"
+
 	"github.com/yanyu/MysqlProbe/message"
 )
 
@@ -15,28 +18,104 @@ const (
 // master collector gathers info from slaves
 // slave collector gathers info from probes
 type Collector struct {
-	clients      map[*Client]bool // connection to slaves
-	report       chan<- []byte      // channel to report
-	reportIn     chan *message.Report  // channel to gather report
-	messageIn    chan *message.Message // channel to gather message
-	stop         chan struct{}    // channel to stop collector
-	register     chan *Client     // client register channel
-	unregister   chan *Client     // client unregister channel
-	reportPeriod time.Duration    // period to report and flush merged message
-	shutdown     bool             // ture if already stoppted
+	clients           map[*Client]bool      // connection to slaves
+	clientAddrs       map[string]*Client    // connection addr to slaves
+	report            chan<- []byte         // channel to report
+	reportIn          chan *message.Report  // channel to gather report
+	messageIn         chan *message.Message // channel to gather message
+	stop              chan struct{}         // channel to stop collector
+	register          chan *Client          // client register channel
+	unregister        chan *Client          // client unregister channel
+	registerAddr      chan string           // cluster node register channel
+	unregisterAddr    chan string           // cluster node unregister channel
+	rejectConnection  chan bool             // notify to unregist all the connection
+	reportPeriod      time.Duration         // period to report and flush merged message
+	shutdown          bool                  // ture if already stoppted
+	disableConnection bool                  // true if disable to accept connection
+
 	sync.Mutex
 }
 
-func NewCollector(report chan<- []byte, reportPeriod time.Duration) *Collector {
+func NewCollector(report chan<- []byte, reportPeriod time.Duration, disableConnection bool) *Collector {
 	return &Collector{
-		report:       report,
-		reportIn:     make(chan *message.Report),
-		messageIn:    make(chan *message.Message),
-		register:     make(chan *Client),
-		unregister:   make(chan *Client),
-		stop:         make(chan struct{}),
-		reportPeriod: reportPeriod,
-		shutdown:     false,
+		clients:           make(map[*Client]bool),
+		clientAddrs:       make(map[string]*Client),
+		report:            report,
+		reportIn:          make(chan *message.Report),
+		messageIn:         make(chan *message.Message),
+		register:          make(chan *Client),
+		unregister:        make(chan *Client),
+		stop:              make(chan struct{}),
+		reportPeriod:      reportPeriod,
+		shutdown:          false,
+		disableConnection: disableConnection,
+	}
+}
+
+func (c *Collector) DisableConnection() {
+	c.rejectConnection <- true
+}
+
+func (c *Collector) EnableConnection() {
+	c.rejectConnection <- false
+}
+
+func (c *Collector) AddNode(addr string) {
+	c.registerAddr <- addr
+}
+
+func (c *Collector) RemoveNode(addr string) {
+	c.unregisterAddr <- addr
+}
+
+func (c *Collector) innerupdate() {
+	for {
+		select {
+		case addr := <-c.registerAddr:
+			if c.disableConnection {
+				glog.Warning("collector has disabled connection")
+				continue
+			}
+
+			if _, ok := c.clientAddrs[addr]; !ok {
+				glog.V(5).Infof("collector adds node: %v", addr)
+				// create client
+				u := url.URL{Scheme: "ws", Host: addr, Path: "/"}
+				conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+				if err != nil {
+					glog.Warningf("collector add node %v failed: %v", addr, err)
+				} else {
+					client := &Client{hub: c, addr: addr, conn: conn, send: make(chan []byte, 256)}
+					c.clientAddrs[addr] = client
+					// register client
+					c.register <- client
+					glog.V(5).Infof("collector add node %v done", addr)
+				}
+			} else {
+				glog.Warningf("collector has added noed: %v", addr)
+			}
+		case addr := <-c.unregisterAddr:
+			if client := c.clientAddrs[addr]; client != nil {
+				glog.V(5).Infof("collector removes node: %v", addr)
+				c.unregister <- client
+			} else {
+				glog.V(5).Infof("collector cannot remove node %v as it is not in the cluster", addr)
+			}
+		case flag := <-c.rejectConnection:
+			if flag {
+				// possible node role changed: master -> standby, stop colloect data from nodes
+				for addr, client := range c.clientAddrs {
+					glog.V(5).Infof("clean client: %v", addr)
+					c.unregister <- client
+					delete(c.clientAddrs, addr)
+				}
+				c.disableConnection = true
+			} else {
+				c.disableConnection = false
+			}
+		case <-c.stop:
+			return
+		}
 	}
 }
 
@@ -71,7 +150,7 @@ func (c *Collector) Unregister() chan<- *Client {
 }
 
 func (c *Collector) ProcessData(data []byte) {
-	r, err := message.DecodeReportFromBytes(data);
+	r, err := message.DecodeReportFromBytes(data)
 	if err != nil {
 		glog.Warningf("decode report failed: %v", err)
 		return
