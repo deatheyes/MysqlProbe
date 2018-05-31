@@ -112,7 +112,6 @@ func (s *Server) NotifyJoin(node *cluster.Node) {
 	s.Lock()
 	defer s.Unlock()
 
-	// collector only concerned about the slave join, and only master will react to it
 	if node.Role == "slave" && s.topo.Role == "master" {
 		s.collector.AddNode(node.Addr)
 	}
@@ -139,7 +138,6 @@ func (s *Server) NotifyLeave(node *cluster.Node) {
 	s.Lock()
 	defer s.Unlock()
 
-	// collector only concerned about the slave join, and only master will react to it
 	if node.Role == "slave" && s.topo.Role == "master" {
 		s.collector.RemoveNode(node.Addr)
 	}
