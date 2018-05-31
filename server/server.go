@@ -2,7 +2,7 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -56,7 +56,7 @@ func (s *Server) Run() {
 	go s.collector.Run()
 
 	// start websocket server
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/collector", func(w http.ResponseWriter, r *http.Request) {
 		serveWs(s.dispatcher, w, r)
 	})
 	http.HandleFunc("/cluster", func(w http.ResponseWriter, r *http.Request) {
@@ -77,7 +77,7 @@ func (s Server) handleCluster(w http.ResponseWriter, r *http.Request) {
 		glog.Warningf("server handle cluster info failed: %v", err)
 		return
 	}
-	fmt.Fprint(w, data)
+	io.WriteString(w, string(data))
 }
 
 // cluster delegate

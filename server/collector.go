@@ -80,7 +80,7 @@ func (c *Collector) innerupdate() {
 			if _, ok := c.clientAddrs[addr]; !ok {
 				glog.V(5).Infof("collector adds node: %v", addr)
 				// create client
-				u := url.URL{Scheme: "ws", Host: addr, Path: "/"}
+				u := url.URL{Scheme: "ws", Host: addr, Path: "/collector"}
 				conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 				if err != nil {
 					glog.Warningf("collector add node %v failed: %v", addr, err)
