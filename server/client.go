@@ -11,6 +11,7 @@ const (
 	writeTimeout   = 10 * time.Second
 	pongTimeout    = 30 * time.Second
 	pingPeriod     = (pongTimeout * 9) / 10
+	retryPerid     = 10 * time.Second
 	maxMessageSize = 65535
 )
 
@@ -20,10 +21,11 @@ var upgrader = websocket.Upgrader{
 }
 
 type Client struct {
-	hub  Hub             // hub to register this client
-	conn *websocket.Conn // websocket connection
-	send chan []byte     // channel of outbound messages
-	addr string          // client address
+	hub   Hub             // hub to register this client
+	conn  *websocket.Conn // websocket connection
+	send  chan []byte     // channel of outbound messages
+	dead  bool            // flag if the client is closed, used to detect a retry
+	retry int             // count of retry
 }
 
 func (c *Client) writePump() {
@@ -31,6 +33,7 @@ func (c *Client) writePump() {
 	defer func() {
 		ticker.Stop()
 		c.conn.Close()
+		c.dead = true
 	}()
 
 	for {
@@ -71,6 +74,7 @@ func (c *Client) readPump() {
 	defer func() {
 		c.hub.Unregister() <- c
 		c.conn.Close()
+		c.dead = true
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)

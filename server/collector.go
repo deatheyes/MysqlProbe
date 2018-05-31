@@ -68,15 +68,23 @@ func (c *Collector) RemoveNode(addr string) {
 	c.unregisterAddr <- addr
 }
 
+// node level controll
+// this function run as fake server
+// we need to care about the retry if the client has been unregister but the node not
 func (c *Collector) innerupdate() {
+	ticker := time.NewTicker(retryPerid)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case addr := <-c.registerAddr:
+			// if this isn't a master, do nothing
 			if c.disableConnection {
 				glog.Warning("collector has disabled connection")
 				continue
 			}
 
+			// add a new node
 			if _, ok := c.clientAddrs[addr]; !ok {
 				glog.V(5).Infof("collector adds node: %v", addr)
 				// create client
@@ -85,16 +93,19 @@ func (c *Collector) innerupdate() {
 				if err != nil {
 					glog.Warningf("collector add node %v failed: %v", addr, err)
 				} else {
-					client := &Client{hub: c, addr: addr, conn: conn, send: make(chan []byte, 256)}
+					client := &Client{hub: c, conn: conn, send: make(chan []byte, 256), dead: false, retry: 0}
 					c.clientAddrs[addr] = client
 					// register client
 					c.register <- client
 					glog.V(5).Infof("collector add node %v done", addr)
+					go client.writePump()
+					go client.readPump()
 				}
 			} else {
 				glog.Warningf("collector has added noed: %v", addr)
 			}
 		case addr := <-c.unregisterAddr:
+			// remove a node if exists
 			if client := c.clientAddrs[addr]; client != nil {
 				glog.V(5).Infof("collector removes node: %v", addr)
 				c.unregister <- client
@@ -113,6 +124,28 @@ func (c *Collector) innerupdate() {
 				c.disableConnection = true
 			} else {
 				c.disableConnection = false
+			}
+		case <-ticker.C:
+			// see if any node need an retry
+			for k, v := range c.clientAddrs {
+				if v.dead {
+					glog.V(5).Infof("collector reconnect to node %v retry: %v", k, v.retry)
+					u := url.URL{Scheme: "ws", Host: k, Path: "/collector"}
+					conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+					if err != nil {
+						glog.Warningf("collector reconnect to node %v failed: %v", k, err)
+						v.retry++
+					} else {
+						glog.V(5).Infof("collector reconnect to node %v success", k)
+						client := &Client{hub: c, conn: conn, send: make(chan []byte, 256), dead: false, retry: 0}
+						c.clientAddrs[k] = client
+						// register client
+						c.register <- client
+						glog.V(5).Infof("collector reconnect to node %v done", k)
+						go client.writePump()
+						go client.readPump()
+					}
+				}
 			}
 		case <-c.stop:
 			return
