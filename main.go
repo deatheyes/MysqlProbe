@@ -82,8 +82,7 @@ func main() {
 	if conf.Cluster.Enable {
 		// run as cluster
 		glog.Infof("run as cluster, role: %v address: %v report period: %v s", role, conf.Addr, conf.Interval)
-		d := server.NewCollectorClusterDelegate(s.Collector(), role)
-		c := cluster.NewCluster(!conf.Slave, conf.Cluster.Seeds, conf.Cluster.Group, d)
+		c := cluster.NewCluster(!conf.Slave, conf.Cluster.Seeds, conf.Cluster.Group, s)
 		if err := c.Init(); err != nil {
 			glog.Fatalf("init cluster failed: %v", err)
 			return

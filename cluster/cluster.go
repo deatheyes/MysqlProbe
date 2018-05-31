@@ -13,13 +13,15 @@ import (
 
 // outbound node info
 type Node struct {
-	Addr string
-	Role string
+	Addr  string `json:"address"`
+	Role  string `json:"role"`
+	Epic  uint64 `json:"epic"`
+	Group string `json:"group"`
 }
 
-func NewNode(addr string, role byte) *Node {
-	n := &Node{Addr: addr}
-	switch role {
+func NewNode(addr string, meta *MetaMessage) *Node {
+	n := &Node{Addr: addr, Epic: meta.Epic, Group: meta.Group}
+	switch meta.Role {
 	case slave:
 		n.Role = "slave"
 	case master:
@@ -41,7 +43,7 @@ type ClusterDelegate interface {
 	NotifyJoin(node *Node)
 	NotifyUpdate(node *Node)
 	NotifyLeave(node *Node)
-	NotifyRefresh(nodes []*Node)
+	//NotifyRefresh(nodes []*Node)
 }
 
 type Cluster struct {
@@ -133,12 +135,14 @@ func (c *Cluster) Run() {
 				glog.Warningf("decode node meta failed: %v", err)
 				continue
 			}
-			n := NewNode(member.Addr.String(), meta.Role)
+			n := NewNode(member.Addr.String(), meta)
 			newNodes = append(newNodes, n)
 		}
-		if c.Delegate != nil {
-			c.Delegate.NotifyRefresh(newNodes)
-		}
+		/*
+			if c.Delegate != nil {
+				c.Delegate.NotifyRefresh(newNodes)
+			}
+		*/
 		if len(newNodes) != 0 {
 			// TODO: diff and flush to disk
 		}
@@ -154,7 +158,7 @@ func (c *Cluster) processStatusChange(node *memberlist.Node, join bool) {
 	c.Lock()
 	defer c.Unlock()
 
-	n := NewNode(node.Addr.String(), meta.Role)
+	n := NewNode(node.Addr.String(), meta)
 	if c.Delegate != nil {
 		if join {
 			c.Delegate.NotifyJoin(n)
@@ -188,7 +192,7 @@ func (c *Cluster) processLeave(node *memberlist.Node) {
 	c.Lock()
 	defer c.Unlock()
 
-	n := NewNode(node.Addr.String(), meta.Role)
+	n := NewNode(node.Addr.String(), meta)
 	if c.Delegate != nil {
 		c.Delegate.NotifyLeave(n)
 	}
