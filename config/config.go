@@ -8,7 +8,7 @@ import (
 
 type Config struct {
 	Slave    bool    `yaml:"slave"`    // run as slave in the cluster
-	Addr     string  `yaml:"address"`  // server addr, eg. ":12345"
+	Port     uint16  `yaml:"serverport"`  // server port
 	Interval uint16  `yaml:"interval"` // report interval
 	Cluster  Cluster `yaml:"cluster"`  // cluster config
 	Probe    Probe   `yaml:"probe"`    // probe conifg, only slave will start a probe

@@ -28,13 +28,16 @@ func (d *Dispatcher) Run() {
 		select {
 		case client := <-d.register:
 			// TODO: check if exist
+			glog.V(6).Info("dispatcher register client")
 			d.clients[client] = true
 		case client := <-d.unregister:
+			glog.V(6).Info("dispatcher unregister client")
 			if _, ok := d.clients[client]; ok {
 				delete(d.clients, client)
 				close(client.send)
 			}
 		case message := <-d.broadcast:
+			glog.V(6).Info("dispatcher receive report")
 			for client := range d.clients {
 				select {
 				case client.send <- message:

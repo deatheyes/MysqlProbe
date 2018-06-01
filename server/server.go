@@ -1,45 +1,36 @@
 package server
 
 import (
-	"encoding/json"
-	"io"
+	"fmt"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/golang/glog"
-
-	"github.com/yanyu/MysqlProbe/cluster"
 )
 
-// cluster info reported to user
-type Topo struct {
-	Role  string                   `json:"role"`  // role of this node
-	Nodes map[string]*cluster.Node `json:"nodes"` // cluster Node
-}
-
 type Server struct {
-	dispatcher *Dispatcher // dispatcher to serve the client
-	collector  *Collector  // collector to gather message
-	addr       string      // server addr
-	topo       *Topo       // cluster topology
-	sync.RWMutex
+	dispatcher        *Dispatcher       // dispatcher to serve the client
+	collector         *Collector        // collector to gather message
+	distributedSystem DistributedSystem // distributed system handling topo
+	port              uint16            // server port
 }
 
-func NewServer(addr string, slave bool, interval uint16) *Server {
-	t := &Topo{Nodes: make(map[string]*cluster.Node)}
-	if slave {
-		t.Role = "master"
-	} else {
-		t.Role = "slave"
-	}
-
+func NewServer(port uint16, role string, interval uint16, cluster bool, group string) *Server {
 	s := &Server{
 		dispatcher: NewDispatcher(),
-		addr:       addr,
-		topo:       t,
+		port:       port,
 	}
-	s.collector = NewCollector(s.dispatcher.In(), time.Duration(interval)*time.Second, slave)
+
+	flag := true
+	if role != "slave" {
+		flag = false
+	}
+	s.collector = NewCollector(s.dispatcher.In(), time.Duration(interval)*time.Second, flag)
+	if cluster {
+		s.distributedSystem = NewGossipSystem(s, role, group)
+	} else {
+		s.distributedSystem = NewStaticSystem(s, role, group)
+	}
 	return s
 }
 
@@ -52,6 +43,7 @@ func (s *Server) Dispatcher() *Dispatcher {
 }
 
 func (s *Server) Run() {
+	s.distributedSystem.Run()
 	go s.dispatcher.Run()
 	go s.collector.Run()
 
@@ -59,93 +51,17 @@ func (s *Server) Run() {
 	http.HandleFunc("/collector", func(w http.ResponseWriter, r *http.Request) {
 		serveWs(s.dispatcher, w, r)
 	})
-	http.HandleFunc("/cluster", func(w http.ResponseWriter, r *http.Request) {
-		s.handleCluster(w, r)
+	http.HandleFunc("/cluster/listnodes", func(w http.ResponseWriter, r *http.Request) {
+		serveListNodes(s.distributedSystem, w, r)
 	})
-	err := http.ListenAndServe(s.addr, nil)
+	http.HandleFunc("/cluster/join", func(w http.ResponseWriter, r *http.Request) {
+		serveJoin(s.distributedSystem, w, r)
+	})
+	http.HandleFunc("/cluster/leave", func(w http.ResponseWriter, r *http.Request) {
+		serveLeave(s.distributedSystem, w, r)
+	})
+	err := http.ListenAndServe(fmt.Sprintf(":%d", s.port), nil)
 	if err != nil {
 		glog.Fatalf("listen and serve failed: %v", err)
 	}
 }
-
-func (s Server) handleCluster(w http.ResponseWriter, r *http.Request) {
-	s.RLock()
-	defer s.RUnlock()
-
-	data, err := json.Marshal(s.topo)
-	if err != nil {
-		glog.Warningf("server handle cluster info failed: %v", err)
-		return
-	}
-	io.WriteString(w, string(data))
-}
-
-// cluster delegate
-func (s *Server) NotifyMyRoleChanged(oldRole string, newRole string) {
-	glog.V(5).Infof("my role change form %v to %v", oldRole, newRole)
-
-	s.Lock()
-	defer s.Unlock()
-
-	s.topo.Role = newRole
-	switch newRole {
-	case "master":
-		// start collect data from nodes
-		s.collector.EnableConnection()
-		// create connection for all slaves
-		for _, n := range s.topo.Nodes {
-			if n.Role == "slave" {
-				s.collector.AddNode(n.Addr)
-			}
-		}
-	case "standby":
-		// stop collect data from nodes
-		s.collector.DisableConnection()
-	default:
-		s.collector.DisableConnection()
-	}
-}
-
-func (s *Server) NotifyJoin(node *cluster.Node) {
-	glog.V(5).Infof("new node join: %s", node)
-
-	s.Lock()
-	defer s.Unlock()
-
-	if node.Role == "slave" && s.topo.Role == "master" {
-		s.collector.AddNode(node.Addr)
-	}
-
-	// update topo
-	// TODO: what if node exists
-	s.topo.Nodes[node.Addr] = node
-}
-
-func (s *Server) NotifyUpdate(node *cluster.Node) {
-	glog.V(5).Infof("node update: %s", node)
-
-	s.Lock()
-	defer s.Unlock()
-
-	// update topo
-	// TODO: what if node not exists
-	s.topo.Nodes[node.Addr] = node
-}
-
-func (s *Server) NotifyLeave(node *cluster.Node) {
-	glog.V(5).Infof("node leave: %s", node)
-
-	s.Lock()
-	defer s.Unlock()
-
-	if node.Role == "slave" && s.topo.Role == "master" {
-		s.collector.RemoveNode(node.Addr)
-	}
-
-	// update topo
-	delete(s.topo.Nodes, node.Addr)
-}
-
-/*func (s *Server) NotifyRefresh(nodes []*cluster.Node) {
-	// periodicity diff the cluster
-}*/

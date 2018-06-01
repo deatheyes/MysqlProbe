@@ -45,6 +45,8 @@ func NewCollector(report chan<- []byte, reportPeriod time.Duration, disableConne
 		messageIn:         make(chan *message.Message),
 		register:          make(chan *Client),
 		unregister:        make(chan *Client),
+		registerAddr:      make(chan string),
+		unregisterAddr:    make(chan string),
 		stop:              make(chan struct{}),
 		reportPeriod:      reportPeriod,
 		shutdown:          false,
@@ -75,6 +77,8 @@ func (c *Collector) innerupdate() {
 	ticker := time.NewTicker(retryPerid)
 	defer ticker.Stop()
 
+	dialer := &websocket.Dialer{HandshakeTimeout: time.Second}
+	glog.Info("collect innerupdate run...")
 	for {
 		select {
 		case addr := <-c.registerAddr:
@@ -89,7 +93,7 @@ func (c *Collector) innerupdate() {
 				glog.V(5).Infof("collector adds node: %v", addr)
 				// create client
 				u := url.URL{Scheme: "ws", Host: addr, Path: "/collector"}
-				conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+				conn, _, err := dialer.Dial(u.String(), nil)
 				if err != nil {
 					glog.Warningf("collector add node %v failed: %v", addr, err)
 				} else {
@@ -131,7 +135,7 @@ func (c *Collector) innerupdate() {
 				if v.dead {
 					glog.V(5).Infof("collector reconnect to node %v retry: %v", k, v.retry)
 					u := url.URL{Scheme: "ws", Host: k, Path: "/collector"}
-					conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+					conn, _, err := dialer.Dial(u.String(), nil)
 					if err != nil {
 						glog.Warningf("collector reconnect to node %v failed: %v", k, err)
 						v.retry++
@@ -189,7 +193,7 @@ func (c *Collector) ProcessData(data []byte) {
 }
 
 func (c *Collector) Run() {
-	glog.V(8).Info("collector start...")
+	glog.Info("collector start...")
 	go c.innerupdate()
 
 	report := message.NewReport()
@@ -205,17 +209,21 @@ func (c *Collector) Run() {
 				close(client.send)
 			}
 		case r := <-c.reportIn:
+			glog.V(8).Info("collector merge report")
 			// merge collected reports, used by master and standby master
 			report.Merge(r)
 		case m := <-c.messageIn:
+			glog.V(8).Info("collector merge message")
 			// merge collected messages, used by slave
 			report.AddMessage(m)
 		case <-ticker.C:
-			// report and flush merged message
+			glog.V(8).Info("collector flush report")
+			// report and flush merged data
 			if len(report.Groups) > 0 {
 				if data, err := message.EncodeReportToBytes(report); err != nil {
 					glog.Warningf("encode report failed: %v", err)
 				} else {
+					glog.V(8).Info("collector send report")
 					c.report <- data
 				}
 				report = message.NewReport()
