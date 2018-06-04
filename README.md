@@ -23,10 +23,13 @@ There are two cluster modes, gossip and static.
 In gossip mode, nodes are aware of each other, auto failover could be taken by the system.
 
 #### Interface
-* collector("/collecotro"): a websocket interface for caller to get assembled data from master or slave.
-* join("/cluster/join?addr="): a http interface to join current node to a cluster.
-* leave("/cluster/leave"): a http interface to make current node left from its cluster.
+* collector("/collector"): a websocket interface for caller to get assembled data from master or slave.
+* join("/cluster/join?addr="): a http interface to join current node (gossip mode) or add a slave to current node (static mode).
+* leave("/cluster/leave"): a http interface to make current node left from its cluster
+* remove("cluster/remove?addr="): a http interface to remove a slave from a master, static mode only.
 * listnodes("/cluster/listnodes") : a http interface to list the topology of current node.
+
+Note: all interfaces are only availiable on master if cluster runs as static mode
 
 ### Static Cluster
 There are only masters and slaves in static mode. Manual intervention is needed when nodes down.
@@ -35,8 +38,9 @@ There are only masters and slaves in static mode. Manual intervention is needed 
 
 The configuration is a yaml file as below:
 
+	slave: true      # true if run as slave. In gossip mode, those nodes not slave are initialized as master. 
 	serverport: 8667 # websocket address the node listen
-	interval: 10     # report interval
+	interval: 10     # report interval, slaves and master(s) will report assembled data period by websocket
 	cluster:
 	  gossip: true   # true if run as gossip mode
   	  group: test    # cluster name
