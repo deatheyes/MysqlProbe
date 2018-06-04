@@ -391,7 +391,7 @@ func NewStaticSystem(server *Server, role string, group string) *StaticSystem {
 func (d *StaticSystem) addNodeByAddr(addr string) error {
 	if _, ok := d.nodes[addr]; !ok {
 		ss := strings.Split(addr, ":")
-		if len(ss) != 0 {
+		if len(ss) != 2 {
 			return fmt.Errorf("unexpected address: %v", addr)
 		}
 
@@ -418,6 +418,11 @@ func (d *StaticSystem) addNodeByAddr(addr string) error {
 }
 
 func (d *StaticSystem) Run() {
+	// slaves don't need the seeds
+	if d.role == NodeRoleSlave {
+		return
+	}
+
 	// try load cluster from seeds
 	if _, err := os.Stat(d.seedsFilePath); os.IsNotExist(err) {
 		glog.Info("no seeds to start cluster")
