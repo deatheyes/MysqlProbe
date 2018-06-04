@@ -14,7 +14,7 @@ Slave run at the same machine with mysql. A probe will be started to capture the
 Master is responsible for collecting infos from slaves. Aggregated data will be reported by websocket.
 
 ### Standby
-Standby is a special master that runs as the backup of the master. It is only available in cluster mode.
+Standby is a special master that runs as the backup of the master. It is only available in gossip cluster mode.
 
 ## Cluster
 There are two cluster modes, gossip and static. 
