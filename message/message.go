@@ -67,10 +67,10 @@ func (r *Report) AddMessage(m *Message) {
 		g = &MessageGroup{}
 		if m.Err {
 			g.FailedCount = 1
-			g.SuccCostMsTotal = cost
+			g.FailedCostMsTotal = cost
 		} else {
 			g.SuccessCount = 1
-			g.FailedCostMsTotal = cost
+			g.SuccCostMsTotal = cost
 		}
 
 		g.LastSeen = m.TimestampReq

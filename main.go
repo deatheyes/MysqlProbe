@@ -61,19 +61,20 @@ func main() {
 	}
 
 	glog.Infof("load config done: %s", string(config.ConfigToBytes(conf)))
+	conf.Path = configfile
 	// set default report interval if necessary
 	if conf.Interval == 0 {
 		conf.Interval = 5
 	}
 
-	role := "master"
+	conf.Role = "master"
 	if conf.Slave {
-		role = "slave"
+		conf.Role = "slave"
 	}
 
 	// start server
-	glog.Infof("run server, role: %v port: %v report period: %v s cluster: %v group: %v", role, conf.Port, conf.Interval, conf.Cluster.Enable, conf.Cluster.Group)
-	s := server.NewServer(conf.Port, role, conf.Interval, conf.Cluster.Enable, conf.Cluster.Group)
+	glog.Infof("run server, role: %v port: %v report period: %v s gossip: %v group: %v", conf.Role, conf.Port, conf.Interval, conf.Cluster.Gossip, conf.Cluster.Group)
+	s := server.NewServer(conf)
 	go s.Run()
 
 	// check if need to start probe

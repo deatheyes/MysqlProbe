@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +17,18 @@ import (
 
 	"github.com/hashicorp/memberlist"
 	"github.com/pborman/uuid"
+
+	localConfig "github.com/yanyu/MysqlProbe/config"
+)
+
+const (
+	NodeRoleSlave   = "slave"
+	NodeRoleMaster  = "master"
+	NodeRoleStandby = "standby"
+)
+
+const (
+	SeedsFileName = "seeds.yaml"
 )
 
 type Broadcast struct {
@@ -61,23 +74,49 @@ type DistributedSystem interface {
 
 // auto failure dectect distributed system
 type GossipSystem struct {
-	server     *Server   // owner
-	meta       *MetaData // local meta
-	master     string    // master of current cluster
-	seeds      []string  // seeds to join
-	list       *memberlist.Memberlist
-	broadcasts *memberlist.TransmitLimitedQueue
-	config     *memberlist.Config
-	localIp    string
-	localPort  uint16
+	server        *Server   // owner
+	meta          *MetaData // local meta
+	master        string    // master of current cluster
+	seeds         []string  // seeds to join
+	list          *memberlist.Memberlist
+	broadcasts    *memberlist.TransmitLimitedQueue
+	config        *memberlist.Config
+	localIp       string
+	localPort     uint16
+	port          uint16
+	seedsFilePath string // seeds file for boot, usually used when restart
+
 	sync.Mutex
 }
 
-func NewGossipSystem(server *Server, role string, group string) *GossipSystem {
+func NewGossipSystem(server *Server, role string, group string, port uint16) *GossipSystem {
+	dir := path.Dir(server.config.Path)
+	seedsFilePath := path.Join(dir, SeedsFileName)
 	return &GossipSystem{
-		server: server,
-		meta:   &MetaData{Role: role, Epic: 0, Group: group, ServerPort: server.port},
+		server:        server,
+		meta:          &MetaData{Role: role, Epic: 0, Group: group, ServerPort: server.config.Port},
+		port:          port,
+		seedsFilePath: seedsFilePath,
 	}
+}
+
+func (d *GossipSystem) writeSeeds() {
+	if d.list == nil || d.list.Members() == nil {
+		// list is not inited
+		return
+	}
+
+	var addrs []string
+	for _, m := range d.list.Members() {
+		addrs = append(addrs, fmt.Sprintf("%v:%v", m.Addr.String(), m.Port))
+	}
+
+	seeds := &localConfig.Seeds{Addrs: addrs}
+
+	if err := localConfig.SeedsToFile(seeds, d.seedsFilePath); err != nil {
+		glog.Warningf("write seeds failed: %v", err)
+	}
+	glog.V(7).Infof("write seeds to %v done", d.seedsFilePath)
 }
 
 func (d *GossipSystem) Run() {
@@ -86,7 +125,7 @@ func (d *GossipSystem) Run() {
 	config.Delegate = d
 	config.Events = d
 	config.Alive = d
-	config.BindPort = 0
+	config.BindPort = int(d.port)
 	config.Name = hostname + "-" + uuid.NewUUID().String()
 	d.config = config
 
@@ -107,11 +146,22 @@ func (d *GossipSystem) Run() {
 	d.localPort = uint16(n.Port)
 
 	// join exists cluster
-	// TODO: load seeds from file
-	if len(d.seeds) > 0 {
-		if _, err := d.list.Join(d.seeds); err != nil {
-			glog.Fatalf("join seeds failed: %v", err)
+	// try load seeds from file
+	if _, err := os.Stat(d.seedsFilePath); os.IsNotExist(err) {
+		glog.Info("no seeds to start cluster")
+	} else {
+		seeds, err := localConfig.SeedsFromFile(d.seedsFilePath)
+		if err != nil {
+			glog.Fatalf("load seeds failed: %v", err)
 			return
+		}
+
+		if len(seeds.Addrs) > 0 {
+			glog.Infof("init distributed system by seeds: %v", seeds.Addrs)
+			if _, err := d.list.Join(seeds.Addrs); err != nil {
+				glog.Fatalf("join seeds failed: %v", err)
+				return
+			}
 		}
 	}
 
@@ -153,7 +203,7 @@ func (d *GossipSystem) MergeRemoteState(buf []byte, join bool) {
 func (d *GossipSystem) OnRoleChanged(oldRole, newRole string) {
 	glog.V(5).Infof("my role change form %v to %v", oldRole, newRole)
 	switch newRole {
-	case "master":
+	case NodeRoleMaster:
 		// start collect data from nodes
 		d.server.collector.EnableConnection()
 		// create connection for all slaves
@@ -163,7 +213,7 @@ func (d *GossipSystem) OnRoleChanged(oldRole, newRole string) {
 				glog.Warningf("unmarshal meta failed: %v", err)
 				continue
 			}
-			if meta.Role == "slave" {
+			if meta.Role == NodeRoleSlave {
 				d.server.collector.AddNode(fmt.Sprintf("%s:%d", m.Addr.String(), meta.ServerPort))
 			}
 		}
@@ -174,15 +224,15 @@ func (d *GossipSystem) OnRoleChanged(oldRole, newRole string) {
 }
 
 func (d *GossipSystem) checkPromotion(meta *MetaData, node *memberlist.Node) {
-	if meta.Role == "master" {
+	if meta.Role == NodeRoleMaster {
 		// check if need to update status
 		if d.meta.Epic < meta.Epic || (d.meta.Epic == meta.Epic && strings.Compare(d.master, node.Name) < 0) {
 			d.meta.Epic = meta.Epic
 			d.master = node.Name
-			if d.meta.Role == "master" {
+			if d.meta.Role == NodeRoleMaster {
 				// switch to standby
-				d.meta.Role = "standby"
-				d.OnRoleChanged("master", "standby")
+				d.meta.Role = NodeRoleStandby
+				d.OnRoleChanged(NodeRoleMaster, NodeRoleStandby)
 			}
 		}
 	}
@@ -206,10 +256,12 @@ func (d *GossipSystem) NotifyJoin(node *memberlist.Node) {
 	d.checkPromotion(meta, node)
 
 	// see if need to add node to collector
-	if d.meta.Role == "master" && meta.Role == "slave" {
+	if d.meta.Role == NodeRoleMaster && meta.Role == NodeRoleSlave {
 		// we are the master, and found a new slave
 		d.server.collector.AddNode(fmt.Sprintf("%s:%d", node.Addr.String(), meta.ServerPort))
 	}
+	// update seeds
+	go d.writeSeeds()
 }
 
 func (d *GossipSystem) NotifyUpdate(node *memberlist.Node) {
@@ -236,23 +288,24 @@ func (d *GossipSystem) NotifyLeave(node *memberlist.Node) {
 	d.Lock()
 	defer d.Unlock()
 
-	if meta.Role == "master" {
+	if meta.Role == NodeRoleMaster {
 		// check if need an election, only standby could start an election.
 		if d.master == node.Name {
 			// master left
-			if d.meta.Role == "standby" {
+			if d.meta.Role == NodeRoleStandby {
 				// start an election
 				d.meta.Epic++
-				d.meta.Role = "master"
-				d.OnRoleChanged("standby", "master")
+				d.meta.Role = NodeRoleMaster
+				d.OnRoleChanged(NodeRoleStandby, NodeRoleMaster)
 			}
 		}
 	}
 
-	if d.meta.Role == "master" && meta.Role == "slave" {
+	if d.meta.Role == NodeRoleMaster && meta.Role == NodeRoleSlave {
 		// remove the left slave node from collector
 		d.server.collector.RemoveNode(fmt.Sprintf("%s:%d", node.Addr.String(), meta.ServerPort))
 	}
+	go d.writeSeeds()
 }
 
 func (d *GossipSystem) NotifyAlive(peer *memberlist.Node) error {
@@ -312,66 +365,106 @@ func (d *GossipSystem) ListNodes() ([]byte, error) {
 
 // mannually control distributed system
 type StaticSystem struct {
-	server *Server          // owner
-	role   string           // role of this node
-	nodes  map[string]*Node // slaves' info
-	group  string           // cluster group
+	server        *Server          // owner
+	role          string           // role of this node
+	nodes         map[string]*Node // slaves' info
+	group         string           // cluster group
+	seedsFilePath string           // cluster nodes file, usually used when restart
+
 	sync.Mutex
 }
 
 // there is no standby static system
 // slave can only added by master
 func NewStaticSystem(server *Server, role string, group string) *StaticSystem {
+	dir := path.Dir(server.config.Path)
+	seedsFilePath := path.Join(dir, SeedsFileName)
 	return &StaticSystem{
-		server: server,
-		role:   role,
-		group:  group,
-		nodes:  make(map[string]*Node),
+		server:        server,
+		role:          role,
+		group:         group,
+		nodes:         make(map[string]*Node),
+		seedsFilePath: seedsFilePath,
 	}
 }
 
-func (d *StaticSystem) Run() {}
-
-var NotMasterError = errors.New("not master")
-
-func (d *StaticSystem) Join(addr string) error {
-	// only master could join slave
-	if d.role != "master" {
-		return NotMasterError
-	}
-
-	d.Lock()
-	defer d.Unlock()
-
+func (d *StaticSystem) addNodeByAddr(addr string) error {
 	if _, ok := d.nodes[addr]; !ok {
-		d.server.collector.AddNode(addr)
 		ss := strings.Split(addr, ":")
-		if len(ss) != 2 {
-			return fmt.Errorf("unexpected address:%v", addr)
+		if len(ss) != 0 {
+			return fmt.Errorf("unexpected address: %v", addr)
 		}
 
 		port, err := strconv.ParseUint(ss[1], 10, 16)
 		if err != nil {
 			return err
 		}
-
+		d.server.collector.AddNode(addr)
 		d.nodes[addr] = &Node{
 			Name:       addr,
 			IP:         ss[0],
 			GossipPort: 0,
 			Meta: &MetaData{
-				Role:       "slave",
+				Role:       NodeRoleSlave,
 				Epic:       0,
 				ServerPort: uint16(port),
 				Group:      d.group,
 			},
 		}
 	}
+	// update cluster file
+	d.writeSeeds()
 	return nil
 }
 
+func (d *StaticSystem) Run() {
+	// try load cluster from seeds
+	if _, err := os.Stat(d.seedsFilePath); os.IsNotExist(err) {
+		glog.Info("no seeds to start cluster")
+	} else {
+		seeds, err := localConfig.SeedsFromFile(d.seedsFilePath)
+		if err != nil {
+			glog.Fatalf("load seeds failed: %v", err)
+		}
+
+		for _, addr := range seeds.Addrs {
+			if err := d.addNodeByAddr(addr); err != nil {
+				glog.Warningf("load node %v failed: %v", addr, err)
+			}
+		}
+	}
+}
+
+func (d *StaticSystem) writeSeeds() {
+	var addrs []string
+	for k := range d.nodes {
+		addrs = append(addrs, k)
+	}
+
+	// we must sure not to miss any nodes, so block and update cluster nodes file
+	seeds := &localConfig.Seeds{Addrs: addrs}
+	if err := localConfig.SeedsToFile(seeds, d.seedsFilePath); err != nil {
+		glog.Warningf("write seed to %v failed: %v", d.seedsFilePath, err)
+	}
+	glog.V(7).Infof("write seed to %v done", d.seedsFilePath)
+}
+
+var NotMasterError = errors.New("not master")
+
+func (d *StaticSystem) Join(addr string) error {
+	// only master could join slave
+	if d.role != NodeRoleMaster {
+		return NotMasterError
+	}
+
+	d.Lock()
+	defer d.Unlock()
+
+	return d.addNodeByAddr(addr)
+}
+
 func (d *StaticSystem) Leave() error {
-	if d.role != "master" {
+	if d.role != NodeRoleMaster {
 		return NotMasterError
 	}
 
@@ -379,12 +472,14 @@ func (d *StaticSystem) Leave() error {
 	defer d.Unlock()
 
 	d.server.collector.DisableConnection()
+	// update cluster file
+	d.writeSeeds()
 	return nil
 }
 
 func (d *StaticSystem) Remove(addr string) error {
 	// only master could remove slave
-	if d.role != "master" {
+	if d.role != NodeRoleMaster {
 		return NotMasterError
 	}
 
@@ -395,11 +490,13 @@ func (d *StaticSystem) Remove(addr string) error {
 		d.server.collector.RemoveNode(addr)
 		delete(d.nodes, addr)
 	}
+	// update cluster file
+	d.writeSeeds()
 	return nil
 }
 
 func (d *StaticSystem) ListNodes() ([]byte, error) {
-	if d.role != "master" {
+	if d.role != NodeRoleMaster {
 		return nil, NotMasterError
 	}
 

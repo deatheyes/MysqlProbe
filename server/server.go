@@ -6,30 +6,32 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+
+	"github.com/yanyu/MysqlProbe/config"
 )
 
 type Server struct {
 	dispatcher        *Dispatcher       // dispatcher to serve the client
 	collector         *Collector        // collector to gather message
 	distributedSystem DistributedSystem // distributed system handling topo
-	port              uint16            // server port
+	config            *config.Config    // config loaded form file
 }
 
-func NewServer(port uint16, role string, interval uint16, cluster bool, group string) *Server {
+func NewServer(config *config.Config) *Server {
 	s := &Server{
 		dispatcher: NewDispatcher(),
-		port:       port,
+		config:     config,
 	}
 
 	flag := true
-	if role != "slave" {
+	if config.Role != NodeRoleSlave {
 		flag = false
 	}
-	s.collector = NewCollector(s.dispatcher.In(), time.Duration(interval)*time.Second, flag)
-	if cluster {
-		s.distributedSystem = NewGossipSystem(s, role, group)
+	s.collector = NewCollector(s.dispatcher.In(), time.Duration(config.Interval)*time.Second, flag)
+	if config.Cluster.Gossip {
+		s.distributedSystem = NewGossipSystem(s, config.Role, config.Cluster.Group, config.Cluster.Port)
 	} else {
-		s.distributedSystem = NewStaticSystem(s, role, group)
+		s.distributedSystem = NewStaticSystem(s, config.Role, config.Cluster.Group)
 	}
 	return s
 }
@@ -47,10 +49,11 @@ func (s *Server) Run() {
 	go s.dispatcher.Run()
 	go s.collector.Run()
 
-	// start websocket server
+	// websocket
 	http.HandleFunc("/collector", func(w http.ResponseWriter, r *http.Request) {
 		serveWs(s.dispatcher, w, r)
 	})
+	// cluster control
 	http.HandleFunc("/cluster/listnodes", func(w http.ResponseWriter, r *http.Request) {
 		serveListNodes(s.distributedSystem, w, r)
 	})
@@ -60,7 +63,7 @@ func (s *Server) Run() {
 	http.HandleFunc("/cluster/leave", func(w http.ResponseWriter, r *http.Request) {
 		serveLeave(s.distributedSystem, w, r)
 	})
-	err := http.ListenAndServe(fmt.Sprintf(":%d", s.port), nil)
+	err := http.ListenAndServe(fmt.Sprintf(":%d", s.config.Port), nil)
 	if err != nil {
 		glog.Fatalf("listen and serve failed: %v", err)
 	}

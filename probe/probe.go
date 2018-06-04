@@ -76,7 +76,7 @@ func (p *Probe) Run() {
 		return
 	}
 
-	glog.Infof("prbe run - %s", p)
+	glog.Infof("probe run - %s", p)
 	for i := 0; i < p.workerNum; i++ {
 		w := NewProbeWorker(p, p.out, i, time.Second, false)
 		p.workers = append(p.workers, w)
