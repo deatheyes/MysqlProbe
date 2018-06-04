@@ -23,19 +23,24 @@ There are two cluster modes, gossip and static.
 In gossip mode, nodes are aware of each other, auto failover could be taken by the system.
 
 #### Interface
-* collector("/collector"): a websocket interface for caller to get assembled data from master or slave.
-* join("/cluster/join?addr="): a http interface to join current node (gossip mode) or add a slave to current node (static mode).
-* leave("/cluster/leave"): a http interface to make current node left from its cluster
-* remove("cluster/remove?addr="): a http interface to remove a slave from a master, static mode only.
-* listnodes("/cluster/listnodes") : a http interface to list the topology of current node.
-
-Note: all interfaces are only availiable on master if cluster runs as static mode
+* collector("/collector"): A websocket interface for caller to get assembled data from master or slave.
+* join("/cluster/join?addr="): A http interface to join current node to a cluster, 'addr' is one of the cluster node's gossip address.
+* leave("/cluster/leave"): A http interface to make current node left from its cluster.
+* listnodes("/cluster/listnodes") : A http interface to list the topology of current node.
 
 ### Static Cluster
 There are only masters and slaves in static mode. Manual intervention is needed when nodes down.
 
-## Configuration
+#### Interface
+Interfaces are only availiable on master when cluster runs as static mode.
 
+* collector("/collector"): A websocket interface for caller to get assembled data from master or slave.
+* join("/cluster/join?addr="): A http interface to add a slave to current node.
+* leave("/cluster/leave"): A http interface to make the node left from its cluster. All the slave of the node would be removed.
+* remove("cluster/remove?addr="): A http interface to remove a slave from a master. 'addr' is the server address of the slave.
+* listnodes("/cluster/listnodes") : A http interface to list the topology of the node.
+
+## Configuration
 The configuration is a yaml file as below:
 
 	slave: true      # true if run as slave. In gossip mode, those nodes not slave are initialized as master. 
