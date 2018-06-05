@@ -60,9 +60,9 @@ The configuration is a yaml file as below:
 Data collected from slave or master will be reported in form of json. The report contains statistical items as below:
 
 * sql template: A sql template is a sql like text without constant condition value. eg. "select * from user where name=?".
-* overhead: The execution overhead of sql.
-* timestamp: Request and response timestamps of the sql.
-* status: Wether the sql sueecssed or not.
+* overhead: The execution overhead.
+* timestamp: Request and response timestamps.
+* status: Wether sueecssed or not.
 
 This is the current struct of the report(MessageGroup):
 
