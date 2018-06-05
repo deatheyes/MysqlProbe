@@ -55,3 +55,34 @@ The configuration is a yaml file as below:
 	  port: 3306       # port to probe, slave only
 	  snappylength: 0  # snappy buffer length of the probe, slave only
 	  workers: 2       # number of workers to process probe data, slave only
+
+## Output
+Data collected from slave or master will be reported in form of json. The report contains statistical items as below:
+
+* sql template: A sql template is a sql like text without constant condition value. eg. "select * from user where name=?".
+* overhead: The execution overhead of sql.
+* timestamp: Request and response timestamps of the sql.
+* status: Wether the sql sueecssed or not.
+
+This is the current struct of the report(MessageGroup):
+
+	type Message struct {
+        	Sql          string    `json:"sql"`            // templated sql.
+        	Err          bool      `json: "error"`         // sql process error.
+        	ErrMsg       string    `json: "error_message"` // sql process error message.
+        	TimestampReq time.Time `json: "request_time"`  // timestamp for request package.
+        	TimestampRsp time.Time `json: "rsponse_time"`  // timestamp for response package.
+	}
+
+	type MessageGroup struct {
+        	// summary
+        	SuccessCount      int       `json:"success"`            // success query number
+        	FailedCount       int       `json:"failed"`             // failed query number
+        	LastSeen          time.Time `json:"last_seen"`          // the latest timestamp
+        	SuccCostMsTotal   int64     `json:"success_total_cost"` // total cost of success query, we don't caculate average info for the sake of performence
+        	FailedCostMsTotal int64     `json:"failed_total_cost"`  // total cost of failed query, we don't caculate average info for the sake of performence
+        	// detail
+        	Messages []*Message `json:"messages"` // detail info of the query
+	}
+
+Note: the ErrMsg is not availiable as we don't care about what the exact error is. It might be supported in later version.
