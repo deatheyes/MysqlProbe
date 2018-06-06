@@ -80,10 +80,10 @@ type GossipSystem struct {
 	seeds         []string  // seeds to join
 	list          *memberlist.Memberlist
 	broadcasts    *memberlist.TransmitLimitedQueue
-	config        *memberlist.Config
 	localIp       string
 	localPort     uint16
 	port          uint16
+	name          string // node name in the cluster
 	seedsFilePath string // seeds file for boot, usually used when restart
 
 	sync.Mutex
@@ -111,7 +111,7 @@ func (d *GossipSystem) writeSeeds() {
 		addrs = append(addrs, fmt.Sprintf("%v:%v", m.Addr.String(), m.Port))
 	}
 
-	seeds := &localConfig.Seeds{Addrs: addrs}
+	seeds := &localConfig.Seeds{Addrs: addrs, Epic: d.meta.Epic, Name: d.name, Role: d.meta.Role}
 
 	if err := localConfig.SeedsToFile(seeds, d.seedsFilePath); err != nil {
 		glog.Warningf("write seeds failed: %v", err)
@@ -127,37 +127,59 @@ func (d *GossipSystem) Run() {
 	config.Alive = d
 	config.BindPort = int(d.port)
 	config.Name = hostname + "-" + uuid.NewUUID().String()
-	d.config = config
 
-	if d.meta.Role == "master" {
+	if d.meta.Role == NodeRoleMaster {
 		d.master = config.Name
 	} else {
 		d.master = ""
 	}
 
-	list, err := memberlist.Create(config)
-	if err != nil {
-		glog.Fatalf("init distributed system failed: %v", err)
-		return
-	}
-	d.list = list
-	n := d.list.LocalNode()
-	d.localIp = n.Addr.String()
-	d.localPort = uint16(n.Port)
-
-	// join exists cluster
 	// try load seeds from file
 	if _, err := os.Stat(d.seedsFilePath); os.IsNotExist(err) {
 		glog.Info("no seeds to start cluster")
+		d.name = config.Name
+		list, err := memberlist.Create(config)
+		if err != nil {
+			glog.Fatalf("init distributed system failed: %v", err)
+		}
+		d.list = list
+		n := d.list.LocalNode()
+		d.localIp = n.Addr.String()
+		d.localPort = uint16(n.Port)
 	} else {
+		// override the config with seeds
 		seeds, err := localConfig.SeedsFromFile(d.seedsFilePath)
 		if err != nil {
 			glog.Fatalf("load seeds failed: %v", err)
 			return
 		}
 
+		switch seeds.Role {
+			case NodeRoleMaster, NodeRoleSlave, NodeRoleStandby:
+				d.meta.Role = seeds.Role
+			default:
+				glog.Warningf("unkonwn role: %v", seeds.Role)
+		}
+
+		d.meta.Epic = seeds.Epic
+
+		if len(seeds.Name) != 0 {
+			config.Name = seeds.Name
+			d.name = seeds.Name
+		}
+
+		list, err := memberlist.Create(config)
+		if err != nil {
+			glog.Fatalf("init distributed system with seeds %v failed: %v", seeds, err)
+		}
+		d.list = list
+		n := d.list.LocalNode()
+		d.localIp = n.Addr.String()
+		d.localPort = uint16(n.Port)
+
+		// try to join the cluster recorded by seeds
 		if len(seeds.Addrs) > 0 {
-			glog.Infof("init distributed system by seeds: %v", seeds.Addrs)
+			glog.Infof("init distributed system by addresses: %v", seeds.Addrs)
 			if _, err := d.list.Join(seeds.Addrs); err != nil {
 				glog.Fatalf("join seeds failed: %v", err)
 				return
@@ -171,7 +193,7 @@ func (d *GossipSystem) Run() {
 		},
 		RetransmitMult: 3,
 	}
-	glog.Infof("init distributed system done, local member %s:%d", n.Addr, n.Port)
+	glog.Infof("init distributed system done, local member %s:%d, name: %v", d.localIp, d.localPort, d.name)
 }
 
 var UnexpectedGroupError = errors.New("unexpected group")
@@ -240,7 +262,7 @@ func (d *GossipSystem) checkPromotion(meta *MetaData, node *memberlist.Node) {
 
 // event delegate
 func (d *GossipSystem) NotifyJoin(node *memberlist.Node) {
-	if node.Addr.String() == d.localIp && uint16(node.Port) == d.localPort {
+	if node.Name == d.name {
 		return
 	}
 

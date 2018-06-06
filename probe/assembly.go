@@ -131,14 +131,14 @@ func (b *bidi) shutdown() {
 
 	if !b.stopped {
 		b.stopped = true
-		// b.a shuld not be null, just in case.
+		// b.a should not be null, just in case.
+		close(b.stop)
 		if b.a != nil {
 			close(b.a.c)
 		}
 		if b.b != nil {
 			close(b.b.c)
 		}
-		close(b.stop)
 	}
 }
 

@@ -49,7 +49,10 @@ func ConfigToBytes(config *Config) []byte {
 }
 
 type Seeds struct {
+	Epic  uint64   `yaml:"epic"`
+	Name  string   `yaml:"name"`
 	Addrs []string `yaml:"seeds"`
+	Role  string   `yaml:"role"`
 }
 
 func SeedsFromFile(file string) (*Seeds, error) {
