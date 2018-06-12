@@ -41,7 +41,7 @@ Interfaces only availiable on master:
 
 * join("/cluster/join?addr="): A http interface to add a slave to current node.
 * leave("/cluster/leave"): A http interface to make the node left from its cluster. All the slave of the node would be removed.
-* remove("cluster/remove?addr="): A http interface to remove a slave from a master. 'addr' is the server address of the slave.
+* remove("/cluster/remove?addr="): A http interface to remove a slave from a master. 'addr' is the server address of the slave.
 * listnodes("/cluster/listnodes") : A http interface to list the topology of the node.
 
 ## Configuration
@@ -55,7 +55,7 @@ The configuration is a yaml file as below:
   	  group: test    # cluster name
   	  port: 0        # gossip bind port
 	probe:
-	  device: lo0,en0  # devices to probe, slave only, splited by ','
+	  device: lo0,en0  # devices to probe, splited by ',', slave only
 	  port: 3306       # port to probe, slave only
 	  snappylength: 0  # snappy buffer length of the probe, slave only
 	  workers: 2       # number of workers to process probe data, slave only
