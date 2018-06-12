@@ -1,5 +1,5 @@
 # Mysql Probe
-A distributed mysql packets capture and report system
+A distributed mysql packets capture and report system inspired by [vividcortex](https://www.vividcortex.com/) and [linkedin blog](https://engineering.linkedin.com/blog/2017/09/query-analyzer--a-tool-for-analyzing-mysql-queries-without-overh)
 
 ## Modules
 There is only one component which could run as three mode:
