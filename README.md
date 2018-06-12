@@ -89,4 +89,6 @@ This is the current struct of the report(MessageGroup):
         	Messages []*Message `json:"messages"` // detail info of the query
 	}
 
-Note: the ErrMsg is not availiable as we don't care about what the exact error is. It might be supported in later version.
+## Note
+* the ErrMsg is not availiable as we don't care about what the exact error is. It might be supported in later version.
+* On Linux, users may come up with an error 'Activate: can't mmap rx ring: Invalid argument', please refer [here](https://stackoverflow.com/questions/11397367/issue-in-pcap-set-buffer-size) for more detail
