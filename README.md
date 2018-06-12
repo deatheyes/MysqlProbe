@@ -32,9 +32,13 @@ In gossip mode, nodes are aware of each other, auto failover could be taken by t
 There are only masters and slaves in static mode. Manual intervention is needed when nodes down.
 
 #### Interface
-Interfaces are only availiable on master when cluster runs as static mode.
+
+Interfaces both availiable on master and slave:
 
 * collector("/collector"): A websocket interface for caller to get assembled data from master or slave.
+
+Interfaces only availiable on master:
+
 * join("/cluster/join?addr="): A http interface to add a slave to current node.
 * leave("/cluster/leave"): A http interface to make the node left from its cluster. All the slave of the node would be removed.
 * remove("cluster/remove?addr="): A http interface to remove a slave from a master. 'addr' is the server address of the slave.
@@ -51,7 +55,7 @@ The configuration is a yaml file as below:
   	  group: test    # cluster name
   	  port: 0        # gossip bind port
 	probe:
-	  device: lo0      # device to probe, slave only
+	  device: lo0,en0  # devices to probe, slave only, splited by ','
 	  port: 3306       # port to probe, slave only
 	  snappylength: 0  # snappy buffer length of the probe, slave only
 	  workers: 2       # number of workers to process probe data, slave only
