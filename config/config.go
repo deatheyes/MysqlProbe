@@ -25,7 +25,7 @@ type Cluster struct {
 }
 
 type Probe struct {
-	Device  string `yaml:"device"`       // local device probe monitor
+	Device  string `yaml:"device"`       // local devices probe monitor, splited by ','
 	Port    uint16 `yaml:"port"`         // port for bpf filter
 	SnapLen int32  `yaml:"snappylength"` // snappy buffer length
 	Workers int    `yaml:"workers"`      // worker number

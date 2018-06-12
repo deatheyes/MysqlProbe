@@ -155,10 +155,10 @@ func (d *GossipSystem) Run() {
 		}
 
 		switch seeds.Role {
-			case NodeRoleMaster, NodeRoleSlave, NodeRoleStandby:
-				d.meta.Role = seeds.Role
-			default:
-				glog.Warningf("unkonwn role: %v", seeds.Role)
+		case NodeRoleMaster, NodeRoleSlave, NodeRoleStandby:
+			d.meta.Role = seeds.Role
+		default:
+			glog.Warningf("unkonwn role: %v", seeds.Role)
 		}
 
 		d.meta.Epic = seeds.Epic

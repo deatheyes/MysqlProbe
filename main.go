@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 
 	"github.com/golang/glog"
 	"github.com/yanyu/MysqlProbe/config"
@@ -91,20 +92,27 @@ func main() {
 		}
 		// set default snappy buffer length if needed
 		if conf.Probe.SnapLen <= 0 {
-			conf.Probe.SnapLen = int32(1 << 24)
+			conf.Probe.SnapLen = int32(65535)
 		}
 		// set default woker number 1 if needed
 		if conf.Probe.Workers <= 0 {
 			conf.Probe.Workers = 1
 		}
-		// start probe
-		glog.Infof("run probe, device: %v snappylength: %v port: %v workers: %v", conf.Probe.Device, conf.Probe.SnapLen, conf.Probe.Port, conf.Probe.Workers)
-		p := probe.NewProbe(conf.Probe.Device, conf.Probe.SnapLen, conf.Probe.Port, conf.Probe.Workers, s.Collector().MessageIn())
-		if err := p.Init(); err != nil {
-			glog.Fatalf("init probe failed: %v", err)
-			return
+
+		// multi devices support
+		devices := strings.Split(conf.Probe.Device, ",")
+		for _, device := range devices {
+			if len(device) != 0 {
+				// start probe
+				glog.Infof("run probe, device: %v snappylength: %v port: %v workers: %v", device, conf.Probe.SnapLen, conf.Probe.Port, conf.Probe.Workers)
+				p := probe.NewProbe(device, conf.Probe.SnapLen, conf.Probe.Port, conf.Probe.Workers, s.Collector().MessageIn())
+				if err := p.Init(); err != nil {
+					glog.Fatalf("init probe failed: %v", err)
+					return
+				}
+				go p.Run()
+			}
 		}
-		go p.Run()
 	}
 
 	interrupt := make(chan os.Signal, 1)
