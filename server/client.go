@@ -12,7 +12,7 @@ const (
 	pongTimeout    = 30 * time.Second
 	pingPeriod     = (pongTimeout * 9) / 10
 	retryPerid     = 10 * time.Second
-	maxMessageSize = 65535
+	maxMessageSize = 1<<24
 )
 
 var upgrader = websocket.Upgrader{
