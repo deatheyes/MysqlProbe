@@ -51,7 +51,7 @@ func (c *Client) writePump() {
 			}
 
 			c.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
-			w, err := c.conn.NextWriter(websocket.BinaryMessage)
+			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
 				glog.Warningf("get next writer failed: %v", err)
 				return
