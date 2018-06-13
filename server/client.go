@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/golang/glog"
@@ -12,12 +13,15 @@ const (
 	pongTimeout    = 30 * time.Second
 	pingPeriod     = (pongTimeout * 9) / 10
 	retryPerid     = 10 * time.Second
-	maxMessageSize = 1<<24
+	maxMessageSize = 1 << 24
 )
 
 var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1 << 20,
-	WriteBufferSize: 1 << 20,
+	ReadBufferSize:  1 << 24,
+	WriteBufferSize: 1 << 24,
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
 }
 
 type Client struct {
