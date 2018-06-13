@@ -70,6 +70,7 @@ type DistributedSystem interface {
 	Remove(addr string) error
 	Leave() error
 	ListNodes() ([]byte, error)
+	ConfigUpdate(key string, val string) error
 }
 
 // auto failure dectect distributed system
@@ -199,6 +200,8 @@ func (d *GossipSystem) Run() {
 var UnexpectedGroupError = errors.New("unexpected group")
 
 // delegate
+
+// NodeMeta reutrn the binary meta data
 func (d *GossipSystem) NodeMeta(limit int) []byte {
 	data, err := json.Marshal(d.meta)
 	if err != nil {
@@ -385,7 +388,22 @@ func (d *GossipSystem) ListNodes() ([]byte, error) {
 	return data, nil
 }
 
-// mannually control distributed system
+func (d *GossipSystem) ConfigUpdate(key string, val string) error {
+	switch key {
+	case "report_period_ms":
+		period, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return err
+		}
+		d.server.collector.UpdateReportPeriod(time.Duration(period))
+		return nil
+	default:
+		glog.Warningf("unsupport key: %v", key)
+		return errors.New("unsupport key")
+	}
+}
+
+// StaticSystem is a mannually control distributed system
 type StaticSystem struct {
 	server        *Server          // owner
 	role          string           // role of this node
@@ -396,6 +414,7 @@ type StaticSystem struct {
 	sync.Mutex
 }
 
+// NewStaticSystem ...
 // there is no standby static system
 // slave can only added by master
 func NewStaticSystem(server *Server, role string, group string) *StaticSystem {
@@ -522,6 +541,7 @@ func (d *StaticSystem) Remove(addr string) error {
 	return nil
 }
 
+// ListNodes show cluster topology
 func (d *StaticSystem) ListNodes() ([]byte, error) {
 	if d.role != NodeRoleMaster {
 		return nil, NotMasterError
@@ -540,6 +560,23 @@ func (d *StaticSystem) ListNodes() ([]byte, error) {
 		return nil, err
 	}
 	return data, nil
+}
+
+// ConfigUpdate react to dynamic config change
+func (d *StaticSystem) ConfigUpdate(key string, val string) error {
+	switch key {
+	case "report_period_ms":
+		// update myself
+		period, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return err
+		}
+		d.server.collector.UpdateReportPeriod(time.Duration(period))
+		return nil
+	default:
+		glog.Warningf("unsupport key: %v", key)
+		return errors.New("unsupport key")
+	}
 }
 
 // http handle function
@@ -571,4 +608,18 @@ func serveListNodes(d DistributedSystem, w http.ResponseWriter, r *http.Request)
 		return
 	}
 	io.WriteString(w, string(data))
+}
+
+func serveConfigUpdate(d DistributedSystem, w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+
+	key := "report_period_ms"
+	val := r.Form.Get(key)
+
+	if err := d.ConfigUpdate(key, val); err != nil {
+		glog.Warning("update config failed, key: %v val: %v err: %v", key, val, err)
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	io.WriteString(w, "OK")
 }

@@ -9,12 +9,14 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/yanyu/MysqlProbe/message"
+	"github.com/yanyu/MysqlProbe/util"
 )
 
 const (
 	updatePeriod = 10 * time.Second
 )
 
+// Collector is responsable for assembling data
 // master collector gathers info from slaves
 // slave collector gathers info from probes
 type Collector struct {
@@ -32,11 +34,15 @@ type Collector struct {
 	reportPeriod      time.Duration         // period to report and flush merged message
 	shutdown          bool                  // ture if already stoppted
 	disableConnection bool                  // true if disable to accept connection
+	configChanged     bool                  // reload flag
+	qps               *util.RollingNumber   // qps caculator
 
 	sync.Mutex
 }
 
+// NewCollector create a collecotr
 func NewCollector(report chan<- []byte, reportPeriod time.Duration, disableConnection bool) *Collector {
+	number, _ := util.NewRollingNumber(10000, 100)
 	return &Collector{
 		clients:           make(map[*Client]bool),
 		clientAddrs:       make(map[string]*Client),
@@ -51,21 +57,35 @@ func NewCollector(report chan<- []byte, reportPeriod time.Duration, disableConne
 		reportPeriod:      reportPeriod,
 		shutdown:          false,
 		disableConnection: disableConnection,
+		configChanged:     false,
+		qps:               number,
 	}
 }
 
+// UpdateReportPeriod reload the reportPeriod
+func (c *Collector) UpdateReportPeriod(reportPeriod time.Duration) {
+	if c.reportPeriod != reportPeriod {
+		c.reportPeriod = reportPeriod
+		c.configChanged = true
+	}
+}
+
+// DisableConnection clean all client connections
 func (c *Collector) DisableConnection() {
 	c.rejectConnection <- true
 }
 
+// EnableConnection enable and refresh client connections
 func (c *Collector) EnableConnection() {
 	c.rejectConnection <- false
 }
 
+// AddNode add a cluster node specified by addr
 func (c *Collector) AddNode(addr string) {
 	c.registerAddr <- addr
 }
 
+// RemoveNode delete a cluster node specified by addr
 func (c *Collector) RemoveNode(addr string) {
 	c.unregisterAddr <- addr
 }
@@ -157,6 +177,7 @@ func (c *Collector) innerupdate() {
 	}
 }
 
+// Stop shutdown the collector
 func (c *Collector) Stop() {
 	c.Lock()
 	defer c.Unlock()
@@ -212,14 +233,24 @@ func (c *Collector) Run() {
 			glog.V(8).Info("collector merge report")
 			// merge collected reports, used by master and standby master
 			report.Merge(r)
+			// caculate qps
+			for k, group := range r.Groups {
+				c.qps.Add(k, int64(len(group.Messages)))
+			}
 		case m := <-c.messageIn:
 			glog.V(8).Info("collector merge message")
 			// merge collected messages, used by slave
 			report.AddMessage(m)
+			// caculate qps
+			c.qps.Add(m.Sql, 1)
 		case <-ticker.C:
 			glog.V(8).Info("collector flush report")
 			// report and flush merged data
 			if len(report.Groups) > 0 {
+				// merge qps info
+				for k, group := range report.Groups {
+					group.QPS = c.qps.Sum(k)
+				}
 				if data, err := message.EncodeReportToBytes(report); err != nil {
 					glog.Warningf("encode report failed: %v", err)
 				} else {
@@ -227,6 +258,12 @@ func (c *Collector) Run() {
 					c.report <- data
 				}
 				report = message.NewReport()
+			}
+			// see if need to refresh the ticker
+			if c.configChanged {
+				glog.V(8).Infof("ticker update: %v", c.reportPeriod)
+				ticker.Stop()
+				ticker = time.NewTicker(c.reportPeriod)
 			}
 		case <-c.stop:
 			// stop the collector

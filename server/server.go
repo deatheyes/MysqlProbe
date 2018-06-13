@@ -63,6 +63,9 @@ func (s *Server) Run() {
 	http.HandleFunc("/cluster/leave", func(w http.ResponseWriter, r *http.Request) {
 		serveLeave(s.distributedSystem, w, r)
 	})
+	http.HandleFunc("/config/update", func(w http.ResponseWriter, r *http.Request) {
+		serveConfigUpdate(s.distributedSystem, w, r)
+	})
 	err := http.ListenAndServe(fmt.Sprintf(":%d", s.config.Port), nil)
 	if err != nil {
 		glog.Fatalf("listen and serve failed: %v", err)

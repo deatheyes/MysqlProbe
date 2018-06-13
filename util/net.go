@@ -4,6 +4,7 @@ import (
 	"net"
 )
 
+// GetLocalIPs return all the address
 func GetLocalIPs() ([]string, error) {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
