@@ -21,12 +21,14 @@ import (
 	localConfig "github.com/yanyu/MysqlProbe/config"
 )
 
+// lables of role
 const (
 	NodeRoleSlave   = "slave"
 	NodeRoleMaster  = "master"
 	NodeRoleStandby = "standby"
 )
 
+// seeds file to store and reload cluster nodes
 const (
 	SeedsFileName = "seeds.yaml"
 )
@@ -57,6 +59,7 @@ type MetaData struct {
 	ServerPort uint16 `json:"server_port"` // dispatcher port
 }
 
+// Node contains the unit's topology
 type Node struct {
 	Name       string    `json:"name"`
 	IP         string    `json:"ip"`
@@ -64,6 +67,7 @@ type Node struct {
 	Meta       *MetaData `json:"meta"`
 }
 
+// DistributedSystem decide how the cluster works
 type DistributedSystem interface {
 	Run()
 	Join(addr string) error
@@ -73,7 +77,7 @@ type DistributedSystem interface {
 	ConfigUpdate(key string, val string) error
 }
 
-// auto failure dectect distributed system
+// GossipSystem is an auto failure dectect distributed system
 type GossipSystem struct {
 	server        *Server   // owner
 	meta          *MetaData // local meta
@@ -81,7 +85,7 @@ type GossipSystem struct {
 	seeds         []string  // seeds to join
 	list          *memberlist.Memberlist
 	broadcasts    *memberlist.TransmitLimitedQueue
-	localIp       string
+	localIP       string
 	localPort     uint16
 	port          uint16
 	name          string // node name in the cluster
@@ -90,6 +94,7 @@ type GossipSystem struct {
 	sync.Mutex
 }
 
+// NewGossipSystem create a new gossip based system
 func NewGossipSystem(server *Server, role string, group string, port uint16) *GossipSystem {
 	dir := path.Dir(server.config.Path)
 	seedsFilePath := path.Join(dir, SeedsFileName)
@@ -120,6 +125,7 @@ func (d *GossipSystem) writeSeeds() {
 	glog.V(7).Infof("write seeds to %v done", d.seedsFilePath)
 }
 
+// Run initiliaze and start the system
 func (d *GossipSystem) Run() {
 	hostname, _ := os.Hostname()
 	config := memberlist.DefaultWANConfig()
@@ -145,7 +151,7 @@ func (d *GossipSystem) Run() {
 		}
 		d.list = list
 		n := d.list.LocalNode()
-		d.localIp = n.Addr.String()
+		d.localIP = n.Addr.String()
 		d.localPort = uint16(n.Port)
 	} else {
 		// override the config with seeds
@@ -175,7 +181,7 @@ func (d *GossipSystem) Run() {
 		}
 		d.list = list
 		n := d.list.LocalNode()
-		d.localIp = n.Addr.String()
+		d.localIP = n.Addr.String()
 		d.localPort = uint16(n.Port)
 
 		// try to join the cluster recorded by seeds
@@ -194,10 +200,8 @@ func (d *GossipSystem) Run() {
 		},
 		RetransmitMult: 3,
 	}
-	glog.Infof("init distributed system done, local member %s:%d, name: %v", d.localIp, d.localPort, d.name)
+	glog.Infof("init distributed system done, local member %s:%d, name: %v", d.localIP, d.localPort, d.name)
 }
-
-var UnexpectedGroupError = errors.New("unexpected group")
 
 // delegate
 
@@ -264,6 +268,7 @@ func (d *GossipSystem) checkPromotion(meta *MetaData, node *memberlist.Node) {
 }
 
 // event delegate
+
 func (d *GossipSystem) NotifyJoin(node *memberlist.Node) {
 	if node.Name == d.name {
 		return

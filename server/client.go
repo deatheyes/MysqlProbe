@@ -24,6 +24,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+// Client is a integration of network data used by hub
 type Client struct {
 	hub   Hub             // hub to register this client
 	conn  *websocket.Conn // websocket connection
