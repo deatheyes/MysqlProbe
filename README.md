@@ -47,7 +47,7 @@ Interfaces only availiable on master:
 * config-update("/config/update?{key}={value}"): A http interface to config the node dynamiclly. Only 'report\_period\_ms', the sampling freuency of this node, supported currently. 
 
 ## Configuration
-The configuration is a yaml file as below:
+The configuration is a yaml file:
 
 	slave: true      # true if run as slave. In gossip mode, those nodes not slave are initialized as master. 
 	serverport: 8667 # websocket address the node listen
@@ -63,7 +63,7 @@ The configuration is a yaml file as below:
 	  workers: 2       # number of workers to process probe data, slave only
 
 ## Output
-Data collected from slave or master will be reported in form of json. The report contains statistical items as below:
+Data collected from slave or master will be reported in form of json. The report contains statistical items:
 
 * sql template: A sql template is a sql like text without constant condition value. eg. "select * from user where name=?".
 * overhead: The execution overhead.
