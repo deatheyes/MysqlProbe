@@ -100,7 +100,7 @@ func (c *Collector) innerupdate() {
 	ticker := time.NewTicker(retryPerid)
 	defer ticker.Stop()
 
-	dialer := &websocket.Dialer{HandshakeTimeout: time.Second}
+	dialer := &websocket.Dialer{HandshakeTimeout: time.Duration(50) * time.Millisecond}
 	glog.Info("collect innerupdate run...")
 	for {
 		select {

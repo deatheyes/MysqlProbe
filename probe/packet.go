@@ -2,10 +2,13 @@ package probe
 
 import (
 	"bufio"
+	"encoding/binary"
 	"errors"
 
 	"github.com/golang/glog"
 	"github.com/xwb1989/sqlparser"
+
+	"github.com/yanyu/MysqlProbe/util"
 )
 
 type MysqlBasePacket struct {
@@ -37,7 +40,7 @@ type MysqlPacket interface {
 	Seq() uint8
 	Stmt() sqlparser.Statement
 	Sql() string
-	Err() error
+	Status() *MysqlResponseStatus
 }
 
 type MysqlRequestPacket struct {
@@ -59,14 +62,13 @@ func (p *MysqlRequestPacket) Stmt() sqlparser.Statement {
 	return p.stmt
 }
 
-func (p *MysqlRequestPacket) Err() error {
+func (p *MysqlRequestPacket) Status() *MysqlResponseStatus {
 	return nil
 }
 
 type MysqlResponsePacket struct {
-	seq  byte
-	flag byte
-	body []byte
+	seq    byte
+	status *MysqlResponseStatus
 }
 
 func (p *MysqlResponsePacket) Seq() uint8 {
@@ -81,18 +83,23 @@ func (p *MysqlResponsePacket) Stmt() sqlparser.Statement {
 	return nil
 }
 
+func (p *MysqlResponsePacket) Status() *MysqlResponseStatus {
+	return p.status
+}
+
 var ProcessError = errors.New("server process error")
 var NotEnouthDataError = errors.New("not enough data")
 var StmtParsedError = errors.New("sql statemnet parsed failed")
 var NotQueryError = errors.New("not a query")
 var PacketError = errors.New("not a mysql packet")
 
-// TODO: full error message.
-func (p *MysqlResponsePacket) Err() error {
-	if p.flag == iERR {
-		return ProcessError
-	}
-	return nil
+type MysqlResponseStatus struct {
+	flag         byte
+	affectedRows uint64
+	insertID     uint64
+	status       uint16
+	errno        uint16
+	message      string
 }
 
 func (p *MysqlBasePacket) DecodeFromBytes(data []byte) error {
@@ -136,10 +143,35 @@ func (p *MysqlBasePacket) ParseResponsePacket() (*MysqlResponsePacket, error) {
 	if len(p.Data) < 1 {
 		return nil, NotEnouthDataError
 	}
-	packet := &MysqlResponsePacket{seq: p.Seq, flag: p.Data[0]}
-	// packet OK.
-	if len(p.Data) > 1 {
-		packet.body = p.Data[1:]
+
+	switch p.Data[0] {
+	case iOK:
+		return p.parseResponseOk(), nil
+	case iERR:
+		return p.parseResponseErr(), nil
+	default:
+		return &MysqlResponsePacket{seq: p.Seq}, nil
 	}
-	return packet, nil
+}
+
+func (p *MysqlBasePacket) parseResponseOk() *MysqlResponsePacket {
+	var n, m int
+	status := &MysqlResponseStatus{flag: p.Data[0]}
+	status.affectedRows, _, n = util.ReadLengthEncodedInteger(p.Data[1:])
+	status.insertID, _, m = util.ReadLengthEncodedInteger(p.Data[1+n:])
+	status.status = util.ReadStatus(p.Data[1+n+m : 2+n+m])
+	return &MysqlResponsePacket{seq: p.Seq, status: status}
+}
+
+func (p *MysqlBasePacket) parseResponseErr() *MysqlResponsePacket {
+	status := &MysqlResponseStatus{flag: p.Data[0]}
+	status.errno = binary.LittleEndian.Uint16(p.Data[1:3])
+	pos := 3
+	// SQL State [optional: # + 5bytes string]
+	if p.Data[3] == 0x23 {
+		//sqlstate := string(data[4 : 4+5])
+		pos = 9
+	}
+	status.message = string(p.Data[pos:])
+	return &MysqlResponsePacket{seq: p.Seq, status: status}
 }
