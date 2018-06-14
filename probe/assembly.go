@@ -173,22 +173,24 @@ func (b *bidi) run() {
 				b.lastPacketSeen = b.b.r.Seen()
 			}
 			// if there is a request waitting, this packet is possible the first packet of response.
-			if waitting && rspPacket.Status() != nil {
+			if waitting {
 				// fill report data.
 				msg.TimestampRsp = b.b.r.Seen()
 				status := rspPacket.Status()
-				switch status.flag {
-				case iOK:
-					msg.Err = false
-					msg.AffectRows = status.affectedRows
-					msg.ServerStatus = status.status
-				case iERR:
-					msg.Err = true
-					msg.ErrMsg = status.message
-					msg.Errno = status.errno
-				default:
-					// not the reponse concerned
-					continue
+				if status != nil {
+					switch status.flag {
+					case iOK:
+						msg.Err = false
+						msg.AffectRows = status.affectedRows
+						msg.ServerStatus = status.status
+					case iERR:
+						msg.Err = true
+						msg.ErrMsg = status.message
+						msg.Errno = status.errno
+					default:
+						// not the reponse concerned
+						continue
+					}
 				}
 				// report.
 				b.out <- msg
