@@ -82,7 +82,7 @@ This is the current struct of the report(MessageGroup):
 
 	type MessageGroup struct {
         	// summary	
-                QPS               int64     `json:"qps"`                // current qps
+        	QPS               int64     `json:"qps"`                // current qps
         	SuccessCount      int       `json:"success"`            // success query number
         	FailedCount       int       `json:"failed"`             // failed query number
         	LastSeen          time.Time `json:"last_seen"`          // the latest timestamp
