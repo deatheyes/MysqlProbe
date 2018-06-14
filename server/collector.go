@@ -270,6 +270,7 @@ func (c *Collector) Run() {
 				glog.V(8).Infof("ticker update: %v", c.reportPeriod)
 				ticker.Stop()
 				ticker = time.NewTicker(c.reportPeriod)
+				c.configChanged = false
 			}
 		case <-c.stop:
 			// stop the collector
