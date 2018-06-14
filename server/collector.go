@@ -236,21 +236,21 @@ func (c *Collector) Run() {
 				close(client.send)
 			}
 		case r := <-c.reportIn:
-			glog.V(8).Info("collector merge report")
+			glog.V(7).Info("collector merge report")
 			// merge collected reports, used by master and standby master
 			report.Merge(r)
 			// caculate qps
 			for k, group := range r.Groups {
-				c.qps.Add(k, int64(len(group.Messages)))
+				c.qps.Add(k, int64(group.SuccessCount + group.FailedCount))
 			}
 		case m := <-c.messageIn:
-			glog.V(8).Info("collector merge message")
+			glog.V(7).Info("collector merge message")
 			// merge collected messages, used by slave
 			report.AddMessage(m)
 			// caculate qps
 			c.qps.Add(m.Sql, 1)
 		case <-ticker.C:
-			glog.V(8).Info("collector flush report")
+			glog.V(7).Info("collector flush report")
 			// report and flush merged data
 			if len(report.Groups) > 0 {
 				// merge qps info
@@ -267,7 +267,7 @@ func (c *Collector) Run() {
 			}
 			// see if need to refresh the ticker
 			if c.configChanged {
-				glog.V(8).Infof("ticker update: %v", c.reportPeriod)
+				glog.V(7).Infof("ticker update: %v", c.reportPeriod)
 				ticker.Stop()
 				ticker = time.NewTicker(c.reportPeriod)
 				c.configChanged = false
