@@ -36,13 +36,15 @@ type Collector struct {
 	disableConnection bool                  // true if disable to accept connection
 	configChanged     bool                  // reload flag
 	qps               *util.RollingNumber   // qps caculator
+	overhead          *util.RollingNumber   // overhead caculator
 
 	sync.Mutex
 }
 
 // NewCollector create a collecotr
 func NewCollector(report chan<- []byte, reportPeriod time.Duration, disableConnection bool) *Collector {
-	number, _ := util.NewRollingNumber(10000, 100)
+	qps, _ := util.NewRollingNumber(10000, 100)
+	overhead, _ := util.NewRollingNumber(10000, 100)
 	return &Collector{
 		clients:           make(map[*Client]bool),
 		clientAddrs:       make(map[string]*Client),
@@ -58,7 +60,8 @@ func NewCollector(report chan<- []byte, reportPeriod time.Duration, disableConne
 		shutdown:          false,
 		disableConnection: disableConnection,
 		configChanged:     false,
-		qps:               number,
+		qps:               qps,
+		overhead:          overhead,
 	}
 }
 
@@ -241,21 +244,29 @@ func (c *Collector) Run() {
 			report.Merge(r)
 			// caculate qps
 			for k, group := range r.Groups {
-				c.qps.Add(k, int64(group.SuccessCount + group.FailedCount))
+				c.qps.Add(k, int64(group.SuccessCount+group.FailedCount))
+				c.overhead.Add(k, int64(group.SuccCostMsTotal+group.FailedCostMsTotal))
 			}
 		case m := <-c.messageIn:
 			glog.V(7).Info("collector merge message")
 			// merge collected messages, used by slave
 			report.AddMessage(m)
 			// caculate qps
-			c.qps.Add(m.Sql, 1)
+			c.qps.Add(m.SQL, 1)
+			// caculate overhead ms
+			c.overhead.Add(m.SQL, m.TimestampRsp.Sub(m.TimestampReq).Nanoseconds()/1000000)
 		case <-ticker.C:
 			glog.V(7).Info("collector flush report")
 			// report and flush merged data
 			if len(report.Groups) > 0 {
-				// merge qps info
+				// merge summary info
 				for k, group := range report.Groups {
 					group.QPS = c.qps.AverageInSecond(k)
+					if group.QPS == 0 {
+						group.Overhead = -1
+					} else {
+						group.Overhead = c.overhead.AverageInSecond(k) / group.QPS
+					}
 				}
 				if data, err := message.EncodeReportToBytes(report); err != nil {
 					glog.Warningf("encode report failed: %v", err)

@@ -5,17 +5,20 @@ import (
 	"time"
 )
 
+// Message is the info of a sql query
 type Message struct {
-	Sql          string    `json:"sql"`            // templated sql.
-	Err          bool      `json: "error"`         // sql process error.
-	ErrMsg       string    `json: "error_message"` // sql process error message.
-	TimestampReq time.Time `json: "request_time"`  // timestamp for request package.
-	TimestampRsp time.Time `json: "rsponse_time"`  // timestamp for response package.
+	SQL          string    `json:"sql"`           // templated sql.
+	Err          bool      `json:"error"`         // sql process error.
+	ErrMsg       string    `json:"error_message"` // sql process error message.
+	TimestampReq time.Time `json:"request_time"`  // timestamp for request package.
+	TimestampRsp time.Time `json:"rsponse_time"`  // timestamp for response package.
 }
 
+// MessageGroup is the assembled info of a sql template
 type MessageGroup struct {
 	// summary
 	QPS               int64     `json:"qps"`                // current qps
+	Overhead          int64     `json:"overhead"`           // average overhead
 	SuccessCount      int       `json:"success"`            // success query number
 	FailedCount       int       `json:"failed"`             // failed query number
 	LastSeen          time.Time `json:"last_seen"`          // the latest timestamp
@@ -25,6 +28,7 @@ type MessageGroup struct {
 	Messages []*Message `json:"messages"` // detail info of the query
 }
 
+// Merge assemlbe another message group to this one
 func (g *MessageGroup) Merge(ag *MessageGroup) {
 	if ag == nil {
 		return
@@ -52,17 +56,19 @@ func (g *MessageGroup) Merge(ag *MessageGroup) {
 	g.Messages = append(g.Messages, ag.Messages[:]...)
 }
 
-// data reported to master or user
+// Report is the data sent to master or user
 type Report struct {
 	Groups map[string]*MessageGroup `json:"groups"`
 }
 
+// NewReport create a Report
 func NewReport() *Report {
 	return &Report{Groups: make(map[string]*MessageGroup)}
 }
 
+// AddMessage asseble a Message to this Report
 func (r *Report) AddMessage(m *Message) {
-	g := r.Groups[m.Sql]
+	g := r.Groups[m.SQL]
 	cost := m.TimestampRsp.Sub(m.TimestampReq).Nanoseconds() / 1000000
 	if g == nil {
 		g = &MessageGroup{}
@@ -76,7 +82,7 @@ func (r *Report) AddMessage(m *Message) {
 
 		g.LastSeen = m.TimestampReq
 		g.Messages = append(g.Messages, m)
-		r.Groups[m.Sql] = g
+		r.Groups[m.SQL] = g
 	} else {
 		if m.Err {
 			g.FailedCostMsTotal = cost
@@ -93,6 +99,7 @@ func (r *Report) AddMessage(m *Message) {
 	}
 }
 
+// Merge assemble another Report to this one
 func (r *Report) Merge(ar *Report) {
 	if ar == nil {
 		return
@@ -107,6 +114,7 @@ func (r *Report) Merge(ar *Report) {
 	}
 }
 
+// DecodeReportFromBytes unmarshal bytes to a Report
 func DecodeReportFromBytes(data []byte) (*Report, error) {
 	r := &Report{}
 	if err := json.Unmarshal(data, r); err != nil {
@@ -115,6 +123,7 @@ func DecodeReportFromBytes(data []byte) (*Report, error) {
 	return r, nil
 }
 
+// EncodeReportToBytes marshal a Report to bytes
 func EncodeReportToBytes(r *Report) ([]byte, error) {
 	data, err := json.Marshal(r)
 	if err != nil {
