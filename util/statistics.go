@@ -138,3 +138,8 @@ func (n *RollingNumber) Sum(key string) int64 {
 	}
 	return <-n.result
 }
+
+// AverageInSecond caculate the average of the item specified by key in second
+func (n *RollingNumber) AverageInSecond(key string) int64 {
+	return n.Sum(key) * 1000 / n.timeInMilliseconds
+}

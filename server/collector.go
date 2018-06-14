@@ -187,22 +187,27 @@ func (c *Collector) Stop() {
 	}
 }
 
+// ReportIn return the input channel of 'Report'
 func (c *Collector) ReportIn() chan<- *message.Report {
 	return c.reportIn
 }
 
+// MessageIn return the input channel of single 'Message'
 func (c *Collector) MessageIn() chan<- *message.Message {
 	return c.messageIn
 }
 
+// Register submit a client to the client pool
 func (c *Collector) Register() chan<- *Client {
 	return c.register
 }
 
+// Unregister remove a client from client pool
 func (c *Collector) Unregister() chan<- *Client {
 	return c.unregister
 }
 
+// ProcessData decode the report received from slaves
 func (c *Collector) ProcessData(data []byte) {
 	r, err := message.DecodeReportFromBytes(data)
 	if err != nil {
@@ -213,6 +218,7 @@ func (c *Collector) ProcessData(data []byte) {
 	c.reportIn <- r
 }
 
+// Run start the main assembling process on message and report level
 func (c *Collector) Run() {
 	glog.Info("collector start...")
 	go c.innerupdate()
@@ -249,7 +255,7 @@ func (c *Collector) Run() {
 			if len(report.Groups) > 0 {
 				// merge qps info
 				for k, group := range report.Groups {
-					group.QPS = c.qps.Sum(k)
+					group.QPS = c.qps.AverageInSecond(k)
 				}
 				if data, err := message.EncodeReportToBytes(report); err != nil {
 					glog.Warningf("encode report failed: %v", err)
