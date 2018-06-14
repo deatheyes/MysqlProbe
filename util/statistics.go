@@ -11,7 +11,10 @@ type bucket struct {
 }
 
 func newBucket(startTime time.Time) *bucket {
-	return &bucket{startTime: startTime}
+	return &bucket{
+		startTime: startTime,
+		counters: make(map[string]int64),
+	}
 }
 
 type buckets struct {
@@ -102,6 +105,8 @@ func NewRollingNumber(timeInMilliseconds, numberOfBuckets int64) (*RollingNumber
 		numberOfBuckets:         numberOfBuckets,
 		bucketSizeInMillseconds: timeInMilliseconds / numberOfBuckets,
 		buckets:                 newBuckets(numberOfBuckets, timeInMilliseconds*1000000),
+		notify:                  make(chan *rollingNumberEvent),
+		result:                  make(chan int64),
 	}
 	go n.process()
 	return n, nil
@@ -109,14 +114,12 @@ func NewRollingNumber(timeInMilliseconds, numberOfBuckets int64) (*RollingNumber
 
 func (n *RollingNumber) process() {
 	for {
-		select {
-		case event := <-n.notify:
-			switch event.op {
-			case "add":
-				n.buckets.Add(event.key, event.val)
-			case "sum":
-				n.result <- n.buckets.Sum(event.key)
-			}
+		event := <-n.notify
+		switch event.op {
+		case "add":
+			n.buckets.Add(event.key, event.val)
+		case "sum":
+			n.result <- n.buckets.Sum(event.key)
 		}
 	}
 }
