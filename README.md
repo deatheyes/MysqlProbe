@@ -27,6 +27,7 @@ In gossip mode, nodes are aware of each other, auto failover could be taken by t
 * join("/cluster/join?addr="): A http interface to join current node to a cluster, 'addr' is one of the cluster node's gossip address.
 * leave("/cluster/leave"): A http interface to make current node left from its cluster.
 * listnodes("/cluster/listnodes") : A http interface to list the topology of current node.
+* config-update("/config/update?{key}={value}"): A http interface to config the node dynamiclly. Only 'report\_period\_ms', the sampling freuency of this node, supported currently.
 
 ### Static Cluster
 There are only masters and slaves in static mode. Manual intervention is needed when nodes down.
@@ -42,7 +43,8 @@ Interfaces only availiable on master:
 * join("/cluster/join?addr="): A http interface to add a slave to current node.
 * leave("/cluster/leave"): A http interface to make the node left from its cluster. All the slave of the node would be removed.
 * remove("/cluster/remove?addr="): A http interface to remove a slave from a master. 'addr' is the server address of the slave.
-* listnodes("/cluster/listnodes") : A http interface to list the topology of the node.
+* listnodes("/cluster/listnodes"): A http interface to list the topology of the node.
+* config-update("/config/update?{key}={value}"): A http interface to config the node dynamiclly. Only 'report\_period\_ms', the sampling freuency of this node, supported currently. 
 
 ## Configuration
 The configuration is a yaml file as below:
