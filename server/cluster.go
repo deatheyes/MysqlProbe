@@ -395,7 +395,7 @@ func (d *GossipSystem) ConfigUpdate(key string, val string) error {
 		if err != nil {
 			return err
 		}
-		d.server.collector.UpdateReportPeriod(time.Duration(period))
+		d.server.collector.UpdateReportPeriod(time.Duration(period) * time.Millisecond)
 		return nil
 	default:
 		glog.Warningf("unsupport key: %v", key)
@@ -571,7 +571,7 @@ func (d *StaticSystem) ConfigUpdate(key string, val string) error {
 		if err != nil {
 			return err
 		}
-		d.server.collector.UpdateReportPeriod(time.Duration(period))
+		d.server.collector.UpdateReportPeriod(time.Duration(period) * time.Millisecond)
 		return nil
 	default:
 		glog.Warningf("unsupport key: %v", key)
