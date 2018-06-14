@@ -70,7 +70,7 @@ Data collected from slave or master will be reported in form of json. The report
 * timestamp: Request and response timestamps.
 * status: Wether sueecssed or not.
 
-This is the current struct of the report(MessageGroup):
+This is the current struct of the Report:
 
 	type Message struct {
         	Sql          string    `json:"sql"`            // templated sql.
@@ -90,6 +90,11 @@ This is the current struct of the report(MessageGroup):
         	FailedCostMsTotal int64     `json:"failed_total_cost"`  // total cost of failed query, we don't caculate average info for the sake of performence
         	// detail
         	Messages []*Message `json:"messages"` // detail info of the query
+	}
+
+	// data reported to master or user
+	type Report struct {
+        	Groups map[string]*MessageGroup `json:"groups"`
 	}
 
 ## Note
