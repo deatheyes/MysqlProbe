@@ -158,7 +158,7 @@ func (b *bidi) run() {
 			// create report data.
 			waitting = true
 			msg = &message.Message{
-				Sql:          generateQuery(reqPacket.Stmt(), true),
+				SQL:          generateQuery(reqPacket.Stmt(), true),
 				TimestampReq: b.a.r.Seen(),
 			}
 
