@@ -37,6 +37,7 @@ There are only masters and slaves in static mode. Manual intervention is needed 
 Interfaces both availiable on master and slave:
 
 * collector("/collector"): A websocket interface for caller to get assembled data from master or slave.
+* config-update("/config/update?{key}={value}"): A http interface to config the node dynamiclly. Only 'report\_period\_ms', the sampling freuency of this node, supported currently. 
 
 Interfaces only availiable on master:
 
@@ -44,14 +45,13 @@ Interfaces only availiable on master:
 * leave("/cluster/leave"): A http interface to make the node left from its cluster. All the slave of the node would be removed.
 * remove("/cluster/remove?addr="): A http interface to remove a slave from a master. 'addr' is the server address of the slave.
 * listnodes("/cluster/listnodes"): A http interface to list the topology of the node.
-* config-update("/config/update?{key}={value}"): A http interface to config the node dynamiclly. Only 'report\_period\_ms', the sampling freuency of this node, supported currently. 
 
 ## Configuration
 The configuration is a yaml file:
 
 	slave: true      # true if run as slave. In gossip mode, those nodes not slave are initialized as master. 
 	serverport: 8667 # websocket address the node listen
-	interval: 10     # report interval, slaves and master(s) will report assembled data period by websocket
+	interval: 10     # report interval, slaves and master(s) will report assembled data periodically by websocket
 	cluster:
 	  gossip: true   # true if run as gossip mode
   	  group: test    # cluster name
@@ -72,29 +72,34 @@ Data collected from slave or master will be reported in form of json. The report
 
 This is the current struct of the Report:
 
+	// Message is the info of a sql query
 	type Message struct {
-        	Sql          string    `json:"sql"`            // templated sql.
-        	Err          bool      `json: "error"`         // sql process error.
-        	ErrMsg       string    `json: "error_message"` // sql process error message.
-        	TimestampReq time.Time `json: "request_time"`  // timestamp for request package.
-        	TimestampRsp time.Time `json: "rsponse_time"`  // timestamp for response package.
+		SQL          string    `json:"sql"`           // templated sql.
+		Err          bool      `json:"error"`         // sql process error.
+		ErrMsg       string    `json:"error_message"` // sql process error message.
+		Errno        uint16    `json:"errno"`         // sql process error number.
+		ServerStatus uint16    `json:"server_status"` // server response status code.
+		AffectRows   uint64    `json:"affect_rows"`   // affect rows.
+		TimestampReq time.Time `json:"request_time"`  // timestamp for request package.
+		TimestampRsp time.Time `json:"rsponse_time"`  // timestamp for response package.
 	}
-
+	// MessageGroup is the assembled info of a sql template
 	type MessageGroup struct {
-        	// summary	
-        	QPS               int64     `json:"qps"`                // current qps
-        	SuccessCount      int       `json:"success"`            // success query number
-        	FailedCount       int       `json:"failed"`             // failed query number
-        	LastSeen          time.Time `json:"last_seen"`          // the latest timestamp
-        	SuccCostMsTotal   int64     `json:"success_total_cost"` // total cost of success query, we don't caculate average info for the sake of performence
-        	FailedCostMsTotal int64     `json:"failed_total_cost"`  // total cost of failed query, we don't caculate average info for the sake of performence
-        	// detail
-        	Messages []*Message `json:"messages"` // detail info of the query
+		QPS               int64      `json:"qps"`                // current qps
+		Overhead          int64      `json:"overhead"`           // average overhead
+		SuccessCount      int        `json:"success"`            // success query number
+		FailedCount       int        `json:"failed"`             // failed query number
+		LastSeen          time.Time  `json:"last_seen"`          // the latest timestamp
+		SuccCostMsTotal   int64      `json:"success_total_cost"` // total cost of success query, we don't caculate average info for the sake of performence
+		FailedCostMsTotal int64      `json:"failed_total_cost"`  // total cost of failed query, we don't caculate average info for the sake of performence
+		NoGoodIndexUsed   int64      `json:"no_good_index_used"` // count of SERVER_STATUS_NO_GOOD_INDEX_USED
+		NoIndexUsed       int64      `json:"no_index_used"`      // count of SERVER_STATUS_NO_INDEX_USED
+		QueryWasSlow      int64      `json:"query_was_slow"`     // count of SERVER_QUERY_WAS_SLOW
+		Messages          []*Message `json:"messages"`           // detail info of the query, possibly removed later
 	}
-
 	// data reported to master or user
 	type Report struct {
-        	Groups map[string]*MessageGroup `json:"groups"`
+		Groups map[string]*MessageGroup `json:"groups"`
 	}
 
 ## Note
