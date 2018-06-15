@@ -4,6 +4,7 @@ import (
 	"github.com/xwb1989/sqlparser"
 )
 
+// TemplateFormatter replace all the const values to '?'
 func TemplateFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 	if value, ok := node.(*sqlparser.SQLVal); ok {
 		switch value.Type {
@@ -28,10 +29,12 @@ func generateQuery(stmt sqlparser.Statement, template bool) string {
 	return buff.String()
 }
 
+// GenerateSourceQuery rebuild the query by AST
 func GenerateSourceQuery(stmt sqlparser.Statement) string {
 	return generateQuery(stmt, false)
 }
 
+// GenerateTemplateQuery generate a template according to the AST
 func GenerateTemplateQuery(stmt sqlparser.Statement) string {
 	return generateQuery(stmt, true)
 }

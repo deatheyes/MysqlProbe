@@ -26,6 +26,7 @@ type Probe struct {
 	out       chan<- *message.Message // data collect channel.
 }
 
+// NewProbe create a probe to collect and parse packets
 func NewProbe(device string, snapLen int32, port uint16, workerNum int, out chan<- *message.Message) *Probe {
 	p := &Probe{
 		device:    device,
@@ -38,6 +39,7 @@ func NewProbe(device string, snapLen int32, port uint16, workerNum int, out chan
 	return p
 }
 
+// Init is the preprocess before the probe starts
 func (p *Probe) Init() error {
 	IPs, err := util.GetLocalIPs()
 	if err != nil {
@@ -52,6 +54,7 @@ func (p *Probe) Init() error {
 	return nil
 }
 
+// IsRequest distinguish if is a inbound request
 func (p *Probe) IsRequest(dstIP string, dstPort uint16) bool {
 	if dstPort != p.port {
 		return false
@@ -69,6 +72,7 @@ func (p *Probe) String() string {
 		p.device, p.snapLen, p.port, p.filter, p.localIPs, p.inited, p.workerNum)
 }
 
+// Run starts the probe after inited
 func (p *Probe) Run() {
 	// create workers.
 	if !p.inited {

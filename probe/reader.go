@@ -46,9 +46,10 @@ package probe
 
 import (
 	"errors"
-	"github.com/google/gopacket/tcpassembly"
 	"io"
 	"time"
+
+	"github.com/google/gopacket/tcpassembly"
 )
 
 var discardBuffer = make([]byte, 4096)
@@ -212,6 +213,7 @@ func (r *ReaderStream) Close() error {
 	}
 }
 
+// Seen return the last time packet processed
 func (r *ReaderStream) Seen() time.Time {
 	return r.seen
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/yanyu/MysqlProbe/message"
 )
 
+// ProbeWorker assembles the data from tcp connection distributed by Probe
 type ProbeWorker struct {
 	owner        *Probe                  // owner.
 	in           chan gopacket.Packet    // input channel.
@@ -22,6 +23,7 @@ type ProbeWorker struct {
 	interval     time.Duration           // flush interval.
 }
 
+// NewProbeWorker create a new woker to assemble tcp data
 func NewProbeWorker(prbe *Probe, out chan<- *message.Message, id int, interval time.Duration, logAllPacket bool) *ProbeWorker {
 	p := &ProbeWorker{
 		owner:        prbe,
@@ -35,6 +37,7 @@ func NewProbeWorker(prbe *Probe, out chan<- *message.Message, id int, interval t
 	return p
 }
 
+// Run initilize and start the assembling process
 func (w *ProbeWorker) Run() {
 	f := func(netFlow, tcpFlow gopacket.Flow) bool {
 		ip := netFlow.Dst()

@@ -14,6 +14,7 @@ import (
 	"github.com/yanyu/MysqlProbe/message"
 )
 
+// Key is the pair of networker and transport Flow
 type Key struct {
 	net, transport gopacket.Flow
 }
@@ -22,6 +23,7 @@ func (k Key) String() string {
 	return fmt.Sprintf("%v:%v", k.net, k.transport)
 }
 
+// MysqlStream is a tcp assemble stream wrapper of ReaderStream
 type MysqlStream struct {
 	bidi   *bidi            // maps to the bidirectional twin.
 	r      ReaderStream     // low level stream for tcpassembly
@@ -31,6 +33,7 @@ type MysqlStream struct {
 	client bool             // ture if it is a requeset stream.
 }
 
+// NewMysqlStream create a bi-directional tcp assembly stream
 func NewMysqlStream(bidi *bidi, client bool) *MysqlStream {
 	s := &MysqlStream{
 		bidi:   bidi,
@@ -203,8 +206,10 @@ func (b *bidi) run() {
 	}
 }
 
+// IsRequest is a callback set by user to distinguish flow direction
 type IsRequest func(netFlow, tcpFlow gopacket.Flow) bool
 
+// BidiFactory retains the basic data to create a bidi
 type BidiFactory struct {
 	bidiMap   map[Key]*bidi           // bidiMap maps keys to bidirectional stream pairs.
 	out       chan<- *message.Message // channle to report message.

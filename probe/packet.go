@@ -11,12 +11,14 @@ import (
 	"github.com/yanyu/MysqlProbe/util"
 )
 
+// MysqlBasePacket is the complete packet with head and payload
 type MysqlBasePacket struct {
 	Len  []byte
 	Seq  byte
 	Data []byte
 }
 
+// ReadMysqlBasePacket read and parse mysql base packet from a reader
 func ReadMysqlBasePacket(reader *bufio.Reader) (*MysqlBasePacket, error) {
 	var err error
 	packet := &MysqlBasePacket{Len: make([]byte, 3)}
@@ -36,6 +38,7 @@ func ReadMysqlBasePacket(reader *bufio.Reader) (*MysqlBasePacket, error) {
 	return packet, nil
 }
 
+// MysqlPacket is the interface of MysqlRequestPacket and MysqlResponsePacket
 type MysqlPacket interface {
 	Seq() uint8
 	Stmt() sqlparser.Statement
@@ -43,6 +46,7 @@ type MysqlPacket interface {
 	Status() *MysqlResponseStatus
 }
 
+// MysqlRequestPacket retains the infomation of query packet
 type MysqlRequestPacket struct {
 	seq  byte
 	cmd  byte
@@ -50,49 +54,58 @@ type MysqlRequestPacket struct {
 	stmt sqlparser.Statement
 }
 
+// Seq return the sequence id in head
 func (p *MysqlRequestPacket) Seq() uint8 {
 	return uint8(p.seq)
 }
 
+// Sql return the sql in query packet
 func (p *MysqlRequestPacket) Sql() string {
 	return string(p.sql)
 }
 
+// Stmt return the AST of the sql in query packet
 func (p *MysqlRequestPacket) Stmt() sqlparser.Statement {
 	return p.stmt
 }
 
+// Status return the flag of OK packet
 func (p *MysqlRequestPacket) Status() *MysqlResponseStatus {
 	return nil
 }
 
+// MysqlResponsePacket retains the infomation about the response packet of query
 type MysqlResponsePacket struct {
 	seq    byte
 	status *MysqlResponseStatus
 }
 
+// Seq return the sequence id in head
 func (p *MysqlResponsePacket) Seq() uint8 {
 	return uint8(p.seq)
 }
 
+// Sql return empty string just for interface compatiblility
 func (p *MysqlResponsePacket) Sql() string {
 	return ""
 }
 
+// Stmt return nil just for interface compatiblility
 func (p *MysqlResponsePacket) Stmt() sqlparser.Statement {
 	return nil
 }
 
+// Status return the extend infomation of OK and Err
 func (p *MysqlResponsePacket) Status() *MysqlResponseStatus {
 	return p.status
 }
 
-var ProcessError = errors.New("server process error")
-var NotEnouthDataError = errors.New("not enough data")
-var StmtParsedError = errors.New("sql statemnet parsed failed")
-var NotQueryError = errors.New("not a query")
-var PacketError = errors.New("not a mysql packet")
+var errNotEnouthData = errors.New("not enough data")
+var errStmtParsedFailed = errors.New("sql statemnet parsed failed")
+var errNotQuery = errors.New("not a query")
+var errNotMysqlPacket = errors.New("not a mysql packet")
 
+// MysqlResponseStatus retains parts of the query reponse data
 type MysqlResponseStatus struct {
 	flag         byte
 	affectedRows uint64
@@ -102,9 +115,10 @@ type MysqlResponseStatus struct {
 	message      string
 }
 
+// DecodeFromBytes unmarshal mysql base packet form bytes
 func (p *MysqlBasePacket) DecodeFromBytes(data []byte) error {
 	if len(data) < 4 {
-		return NotEnouthDataError
+		return errNotEnouthData
 	}
 
 	p.Len = data[0:3]
@@ -114,15 +128,16 @@ func (p *MysqlBasePacket) DecodeFromBytes(data []byte) error {
 	dataEnd := length + 4
 	if dataEnd > len(data) {
 		glog.Warningf("unexpected data length: %v, required: %v, data: %s", len(data), dataEnd, string(data[5:]))
-		return PacketError
+		return errNotMysqlPacket
 	}
 	p.Data = data[4:]
 	return nil
 }
 
+// ParseRequestPacket filter out the query packet
 func (p *MysqlBasePacket) ParseRequestPacket() (*MysqlRequestPacket, error) {
 	if len(p.Data) < 2 {
-		return nil, NotEnouthDataError
+		return nil, errNotEnouthData
 	}
 
 	switch p.Data[0] {
@@ -130,18 +145,19 @@ func (p *MysqlBasePacket) ParseRequestPacket() (*MysqlRequestPacket, error) {
 		stmt, err := sqlparser.Parse(string(p.Data[1:]))
 		if err != nil || stmt == nil {
 			glog.V(8).Infof("possible not a request packet, prase statement failed: %v", err)
-			return nil, StmtParsedError
+			return nil, errStmtParsedFailed
 		}
 		return &MysqlRequestPacket{seq: p.Seq, cmd: p.Data[0], sql: p.Data[1:], stmt: stmt}, nil
 	default:
 		glog.V(8).Infof("not a query packet: %s", string(p.Data[1:]))
-		return nil, NotQueryError
+		return nil, errNotQuery
 	}
 }
 
+// ParseResponsePacket distinguish OK packet, Err packet and Result set Packet
 func (p *MysqlBasePacket) ParseResponsePacket() (*MysqlResponsePacket, error) {
 	if len(p.Data) < 1 {
-		return nil, NotEnouthDataError
+		return nil, errNotEnouthData
 	}
 
 	switch p.Data[0] {
