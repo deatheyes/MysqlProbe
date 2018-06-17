@@ -61,9 +61,8 @@ func (s MysqlStream) parse(data []byte) (MysqlPacket, error) {
 
 	if s.client {
 		return base.ParseRequestPacket()
-	} else {
-		return base.ParseResponsePacket()
 	}
+	return base.ParseResponsePacket()
 }
 
 func (s *MysqlStream) run() {
@@ -101,6 +100,7 @@ func (s *MysqlStream) run() {
 	}
 }
 
+// bidi is a bi-direction wapper of tcp assembly stream
 type bidi struct {
 	key            Key                     // Key of the first stream, mostly for logging.
 	a, b           *MysqlStream            // the two bidirectional streams.
@@ -114,7 +114,7 @@ type bidi struct {
 	sync.Mutex
 }
 
-func Newbidi(key Key, out chan<- *message.Message, wid int) *bidi {
+func newbidi(key Key, out chan<- *message.Message, wid int) *bidi {
 	b := &bidi{
 		key:     key,
 		req:     make(chan MysqlPacket),
@@ -227,11 +227,11 @@ func (f *BidiFactory) New(netFlow, tcpFlow gopacket.Flow) tcpassembly.Stream {
 	k := Key{netFlow, tcpFlow}
 	bd := f.bidiMap[k]
 	if bd == nil {
-		bd = Newbidi(k, f.out, f.wid)
+		bd = newbidi(k, f.out, f.wid)
 		s = NewMysqlStream(bd, f.isRequest(netFlow, tcpFlow))
 		glog.V(8).Infof("[worker %v][%v] created request side of bidirectional stream", f.wid, bd.key)
-		kReverse := Key{netFlow.Reverse(), tcpFlow.Reverse()}
-		if v := f.bidiMap[kReverse]; v != nil {
+		reverse := Key{netFlow.Reverse(), tcpFlow.Reverse()}
+		if v := f.bidiMap[reverse]; v != nil {
 			// shutdown the Orphan bidi.
 			v.shutdown()
 		}
