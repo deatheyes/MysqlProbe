@@ -39,7 +39,7 @@ type Message struct {
 type MessageGroup struct {
 	// summary
 	QPS               int64     `json:"qps"`                       // current qps
-	Overhead          int64     `json:"avg_latency"`               // average overhead
+	Overhead          int64     `json:"avg_latency"`               // average latency
 	SuccessCount      int       `json:"success"`                   // success query number
 	FailedCount       int       `json:"failed"`                    // failed query number
 	LastSeen          time.Time `json:"last_seen"`                 // the latest timestamp
