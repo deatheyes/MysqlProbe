@@ -173,7 +173,7 @@ func (p *MysqlBasePacket) ParseResponsePacket() (*MysqlResponsePacket, error) {
 func (p *MysqlBasePacket) parseResponseOk() *MysqlResponsePacket {
 	var n, m int
 	status := &MysqlResponseStatus{flag: p.Data[0]}
-	if len(data) == 1 {
+	if len(p.Data) == 1 {
 		// OK packet without extend info
 		return &MysqlResponsePacket{seq: p.Seq, status: status}
 	}
