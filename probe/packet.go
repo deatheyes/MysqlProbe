@@ -180,7 +180,9 @@ func (p *MysqlBasePacket) parseResponseOk() *MysqlResponsePacket {
 	// OK packet with extend info
 	status.affectedRows, _, n = util.ReadLengthEncodedInteger(p.Data[1:])
 	status.insertID, _, m = util.ReadLengthEncodedInteger(p.Data[1+n:])
-	status.status = util.ReadStatus(p.Data[1+n+m : 2+n+m])
+	if len(p.Data) >= 2+n+m {
+		status.status = util.ReadStatus(p.Data[1+n+m : 2+n+m])
+	}
 	return &MysqlResponsePacket{seq: p.Seq, status: status}
 }
 
