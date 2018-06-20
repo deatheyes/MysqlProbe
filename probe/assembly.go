@@ -208,9 +208,10 @@ func (b *bidi) run() {
 						msg.Err = false
 						msg.AffectRows = status.affectedRows
 						msg.ServerStatus = status.status
-						// if is a prepare request, register the sql
+						// if is a prepare request, register the sql and continue
 						if waitting.CMD() == comStmtPrepare {
 							stmtmap[waitting.StmtID()] = waitting.Sql()
+							continue
 						}
 					case iERR:
 						msg.Err = true
