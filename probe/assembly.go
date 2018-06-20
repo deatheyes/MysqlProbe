@@ -186,7 +186,7 @@ func (b *bidi) run() {
 			// update timestamp.
 			if ok := b.lastPacketSeen.Before(b.b.r.Seen()); !ok {
 				// an expired or sub response packet.
-				glog.V(5).Infof("[worker %v] found a useless packet", b.wid)
+				glog.V(8).Infof("[worker %v] found a useless packet", b.wid)
 			} else {
 				b.lastPacketSeen = b.b.r.Seen()
 			}
