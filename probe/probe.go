@@ -21,7 +21,7 @@ type Probe struct {
 	port      uint16                  // probe port.
 	filter    string                  // bpf filter.
 	inited    bool                    // flag if could be run.
-	workers   []*ProbeWorker          // probe worker group processing packet.
+	workers   []*Worker               // probe worker group processing packet.
 	workerNum int                     // worker number.
 	out       chan<- *message.Message // data collect channel.
 }

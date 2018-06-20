@@ -25,12 +25,12 @@ func (k Key) String() string {
 
 // MysqlStream is a tcp assemble stream wrapper of ReaderStream
 type MysqlStream struct {
-	bidi   *bidi            // maps to the bidirectional twin.
-	r      ReaderStream     // low level stream for tcpassembly
-	c      chan MysqlPacket // output channel.
-	stop   chan struct{}    // channel to stop stream.
-	done   bool             // flag parsed success.
-	client bool             // ture if it is a requeset stream.
+	bidi   *bidi                 // maps to the bidirectional twin.
+	r      ReaderStream          // low level stream for tcpassembly
+	c      chan *MysqlBasePacket // output channel.
+	stop   chan struct{}         // channel to stop stream.
+	done   bool                  // flag parsed success.
+	client bool                  // ture if it is a requeset stream.
 }
 
 // NewMysqlStream create a bi-directional tcp assembly stream
@@ -53,18 +53,6 @@ func NewMysqlStream(bidi *bidi, client bool) *MysqlStream {
 	return s
 }
 
-func (s MysqlStream) parse(data []byte) (MysqlPacket, error) {
-	base := &MysqlBasePacket{}
-	if err := base.DecodeFromBytes(data); err != nil {
-		return nil, err
-	}
-
-	if s.client {
-		return base.ParseRequestPacket()
-	}
-	return base.ParseResponsePacket()
-}
-
 func (s *MysqlStream) run() {
 	buf := bufio.NewReader(&s.r)
 	for {
@@ -77,7 +65,12 @@ func (s *MysqlStream) run() {
 			glog.Warningf("[worker %v] stream parse mysql packet failed: %v", s.bidi.wid, err)
 			return
 		} else {
-			var packet MysqlPacket
+			select {
+			case <-s.stop:
+				return
+			case s.c <- base:
+			}
+			/*var packet MysqlPacket
 			var err error
 			if s.client {
 				packet, err = base.ParseRequestPacket()
@@ -95,7 +88,7 @@ func (s *MysqlStream) run() {
 					return
 				case s.c <- packet:
 				}
-			}
+			}*/
 		}
 	}
 }
@@ -106,8 +99,8 @@ type bidi struct {
 	a, b           *MysqlStream            // the two bidirectional streams.
 	lastPacketSeen time.Time               // last time we saw a packet from either stream.
 	out            chan<- *message.Message // channel to report message, copy from bidi factory.
-	req            chan MysqlPacket        // channel to receive request packet.
-	rsp            chan MysqlPacket        // channel to receive response packet.
+	req            chan *MysqlBasePacket   // channel to receive request packet.
+	rsp            chan *MysqlBasePacket   // channel to receive response packet.
 	stop           chan struct{}           // channel to stop stream a, b.
 	stopped        bool                    // if is shutdown.
 	wid            int                     // worker id for log.
@@ -117,8 +110,8 @@ type bidi struct {
 func newbidi(key Key, out chan<- *message.Message, wid int) *bidi {
 	b := &bidi{
 		key:     key,
-		req:     make(chan MysqlPacket),
-		rsp:     make(chan MysqlPacket),
+		req:     make(chan *MysqlBasePacket),
+		rsp:     make(chan *MysqlBasePacket),
 		stop:    make(chan struct{}),
 		out:     out,
 		stopped: false,
@@ -146,10 +139,9 @@ func (b *bidi) shutdown() {
 }
 
 func (b *bidi) run() {
-	var msg *message.Message
-	waitting := false // flag true if there is a request waitting for response.
-	// compare the timestamp of request and response.
-	// TODO: wrap packet with timestamp.
+	var msg *message.Message           // message to report
+	var waitting MysqlPacket           // request waiting for response
+	stmtmap := make(map[uint32]string) // map to register the statement
 	for {
 		select {
 		case reqPacket := <-b.req:
@@ -158,13 +150,36 @@ func (b *bidi) run() {
 			if b.lastPacketSeen.Before(b.a.r.Seen()) {
 				b.lastPacketSeen = b.a.r.Seen()
 			}
-			// create report data.
-			waitting = true
-			msg = &message.Message{
-				SQL:          generateQuery(reqPacket.Stmt(), true),
-				TimestampReq: b.a.r.Seen(),
+			// TODO: parse transaction
+			packet, err := reqPacket.ParseRequestPacket()
+			if err != nil {
+				glog.V(5).Infof("[worker %v] parse packet error: %v, ignored packet: %v", b.wid, err, reqPacket.Data)
+				continue
 			}
-
+			switch packet.CMD() {
+			case comQuery:
+				// this is an raw sql query
+				waitting = packet
+				msg = &message.Message{
+					SQL:          generateQuery(packet.Stmt(), true),
+					TimestampReq: b.a.r.Seen(),
+				}
+			case comStmtPrepare:
+				// the statement will be registered if processed OK
+				// there is no need to build a message
+				waitting = packet
+			case comStmtExecute:
+				waitting = packet
+				stmtID := packet.StmtID()
+				if _, ok := stmtmap[stmtID]; !ok {
+					// no stmt possible query error or sequence error
+					glog.V(5).Infof("[worker %v] no corresponding local statement found, stmtID: %v", stmtID)
+				}
+				msg = &message.Message{
+					SQL:          stmtmap[stmtID],
+					TimestampReq: b.a.r.Seen(),
+				}
+			}
 		case rspPacket := <-b.rsp:
 			glog.V(8).Infof("[worker %v] response packet received", b.wid)
 			// recevice response packet.
@@ -176,16 +191,24 @@ func (b *bidi) run() {
 				b.lastPacketSeen = b.b.r.Seen()
 			}
 			// if there is a request waitting, this packet is possible the first packet of response.
-			if waitting {
-				// fill report data.
+			if waitting != nil {
+				packet, err := rspPacket.ParseResponsePacket(waitting.CMD())
+				if err != nil {
+					glog.V(5).Infof("[worker %v] parse packet error: %v, ignored packet: %v", b.wid, err, rspPacket.Data)
+					continue
+				}
 				msg.TimestampRsp = b.b.r.Seen()
-				status := rspPacket.Status()
+				status := packet.Status()
 				if status != nil {
 					switch status.flag {
 					case iOK:
 						msg.Err = false
 						msg.AffectRows = status.affectedRows
 						msg.ServerStatus = status.status
+						// if is a prepare request, register the sql
+						if waitting.CMD() == comStmtPrepare {
+							stmtmap[waitting.StmtID()] = waitting.Sql()
+						}
 					case iERR:
 						msg.Err = true
 						msg.ErrMsg = status.message
@@ -197,7 +220,7 @@ func (b *bidi) run() {
 				}
 				// report.
 				b.out <- msg
-				waitting = false
+				waitting = nil
 				glog.V(5).Infof("[worker %v] mysql query parsed done: %v", msg, b.wid)
 			}
 		case <-b.stop:
