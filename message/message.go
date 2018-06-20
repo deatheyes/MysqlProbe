@@ -50,7 +50,7 @@ type MessageGroup struct {
 	QueryWasSlow      int64     `json:"status_query_was_slow"`     // count of SERVER_QUERY_WAS_SLOW
 
 	// detail
-	Messages []*Message `json:"messages"` // detail info of the query
+	//Messages []*Message `json:"messages"` // detail info of the query
 }
 
 // Merge assemlbe another message group to this one
@@ -59,11 +59,11 @@ func (g *MessageGroup) Merge(ag *MessageGroup) {
 		return
 	}
 
-	if len(ag.Messages) == 0 {
-		return
-	}
+	//if len(ag.Messages) == 0 {
+	//	return
+	//}
 
-	if len(g.Messages) == 0 {
+	if g.SuccessCount == 0 && g.FailedCount == 0 {
 		g.SuccessCount = ag.SuccessCount
 		g.FailedCount = ag.FailedCount
 		g.LastSeen = ag.LastSeen
@@ -84,7 +84,7 @@ func (g *MessageGroup) Merge(ag *MessageGroup) {
 		g.NoGoodIndexUsed += ag.NoGoodIndexUsed
 		g.QueryWasSlow += ag.QueryWasSlow
 	}
-	g.Messages = append(g.Messages, ag.Messages[:]...)
+	//g.Messages = append(g.Messages, ag.Messages[:]...)
 }
 
 // Report is the data sent to master or user
@@ -112,7 +112,7 @@ func (r *Report) AddMessage(m *Message) {
 		}
 
 		g.LastSeen = m.TimestampReq
-		g.Messages = append(g.Messages, m)
+		//g.Messages = append(g.Messages, m)
 		r.Groups[m.SQL] = g
 	} else {
 		if m.Err {
@@ -126,7 +126,7 @@ func (r *Report) AddMessage(m *Message) {
 		if g.LastSeen.Before(m.TimestampReq) {
 			g.LastSeen = m.TimestampReq
 		}
-		g.Messages = append(g.Messages, m)
+		//g.Messages = append(g.Messages, m)
 	}
 
 	switch m.ServerStatus {
