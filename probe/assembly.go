@@ -173,7 +173,7 @@ func (b *bidi) run() {
 				stmtID := packet.StmtID()
 				if _, ok := stmtmap[stmtID]; !ok {
 					// no stmt possible query error or sequence error
-					glog.V(5).Infof("[worker %v] no corresponding local statement found, stmtID: %v", stmtID)
+					glog.V(5).Infof("[worker %v] no corresponding local statement found, stmtID: %v", b.wid, stmtID)
 				}
 				msg = &message.Message{
 					SQL:          stmtmap[stmtID],
