@@ -168,6 +168,7 @@ func (b *bidi) run() {
 				// the statement will be registered if processed OK
 				// there is no need to build a message
 				waitting = packet
+				msg = &message.Message{}
 			case comStmtExecute:
 				waitting = packet
 				stmtID := packet.StmtID()
@@ -201,10 +202,7 @@ func (b *bidi) run() {
 					glog.V(6).Infof("[worker %v] ignore packet: %v", b.wid, rspPacket.Data)
 					continue
 				}
-				// in some case, such as prepare, msg will be nil
-				if msg != nil {
-					msg.TimestampRsp = b.b.r.Seen()
-				}
+				msg.TimestampRsp = b.b.r.Seen()
 				status := packet.Status()
 				if status != nil {
 					switch status.flag {
