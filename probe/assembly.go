@@ -197,6 +197,10 @@ func (b *bidi) run() {
 					glog.V(5).Infof("[worker %v] parse packet error: %v, ignored packet: %v", b.wid, err, rspPacket.Data)
 					continue
 				}
+				if packet == nil {
+					glog.V(6).Infof("[worker %v] ignore packet: %v", b.wid, rspPacket.Data)
+					continue
+				}
 				// in some case, such as prepare, msg will be nil
 				if msg != nil {
 					msg.TimestampRsp = b.b.r.Seen()
