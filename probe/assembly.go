@@ -191,9 +191,9 @@ func (b *bidi) run() {
 			if ok := b.lastPacketSeen.Before(rspPacket.Timestamp); !ok {
 				// an expired or sub response packet.
 				glog.V(8).Infof("[worker %v] found a useless packet", b.wid)
-			} else {
-				b.lastPacketSeen = rspPacket.Timestamp
+				continue
 			}
+			b.lastPacketSeen = rspPacket.Timestamp
 			// if there is a request waitting, this packet is possible the first packet of response.
 			if waitting != nil {
 				packet, err := rspPacket.ParseResponsePacket(waitting.CMD())
