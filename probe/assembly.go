@@ -1,7 +1,6 @@
 package probe
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"sync"
@@ -54,9 +53,10 @@ func NewMysqlStream(bidi *bidi, client bool) *MysqlStream {
 }
 
 func (s *MysqlStream) run() {
-	buf := bufio.NewReader(&s.r)
+	//buf := bufio.NewReader(&s.r)
 	for {
-		base, err := ReadMysqlBasePacket(buf)
+		//base, err := ReadMysqlBasePacket(buf)
+		base, err := ReadMysqlBasePacket(&s.r)
 		if err == io.EOF {
 			// We must read until we see an EOF... very important!
 			return
@@ -147,8 +147,8 @@ func (b *bidi) run() {
 		case reqPacket := <-b.req:
 			// set expireation timestamp.
 			glog.V(8).Infof("[worker %v] request packet received", b.wid)
-			if b.lastPacketSeen.Before(b.a.r.Seen()) {
-				b.lastPacketSeen = b.a.r.Seen()
+			if b.lastPacketSeen.Before(reqPacket.Timestamp) {
+				b.lastPacketSeen = reqPacket.Timestamp
 			}
 			// TODO: parse transaction
 			packet, err := reqPacket.ParseRequestPacket()
@@ -162,13 +162,13 @@ func (b *bidi) run() {
 				waitting = packet
 				msg = &message.Message{
 					SQL:          generateQuery(packet.Stmt(), true),
-					TimestampReq: b.a.r.Seen(),
+					TimestampReq: reqPacket.Timestamp,
 				}
 			case comStmtPrepare:
 				// the statement will be registered if processed OK
 				// there is no need to build a message
 				waitting = packet
-				msg = &message.Message{}
+				msg = &message.Message{TimestampReq: reqPacket.Timestamp}
 				glog.V(6).Infof("[worker %v] [prepare] sql: %v", b.wid, waitting.Sql())
 			case comStmtExecute:
 				waitting = packet
@@ -181,18 +181,18 @@ func (b *bidi) run() {
 				}
 				msg = &message.Message{
 					SQL:          stmtmap[stmtID],
-					TimestampReq: b.a.r.Seen(),
+					TimestampReq: reqPacket.Timestamp,
 				}
 			}
 		case rspPacket := <-b.rsp:
 			glog.V(8).Infof("[worker %v] response packet received", b.wid)
 			// recevice response packet.
 			// update timestamp.
-			if ok := b.lastPacketSeen.Before(b.b.r.Seen()); !ok {
+			if ok := b.lastPacketSeen.Before(rspPacket.Timestamp); !ok {
 				// an expired or sub response packet.
 				glog.V(8).Infof("[worker %v] found a useless packet", b.wid)
 			} else {
-				b.lastPacketSeen = b.b.r.Seen()
+				b.lastPacketSeen = rspPacket.Timestamp
 			}
 			// if there is a request waitting, this packet is possible the first packet of response.
 			if waitting != nil {
@@ -205,7 +205,7 @@ func (b *bidi) run() {
 					glog.V(6).Infof("[worker %v] ignore packet: %v", b.wid, rspPacket.Data)
 					continue
 				}
-				msg.TimestampRsp = b.b.r.Seen()
+				msg.TimestampRsp = rspPacket.Timestamp
 				status := packet.Status()
 				if status != nil {
 					switch status.flag {

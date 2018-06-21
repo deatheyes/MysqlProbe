@@ -1,9 +1,10 @@
 package probe
 
 import (
-	"bufio"
 	"encoding/binary"
 	"errors"
+	"io"
+	"time"
 
 	"github.com/golang/glog"
 	"github.com/xwb1989/sqlparser"
@@ -13,13 +14,30 @@ import (
 
 // MysqlBasePacket is the complete packet with head and payload
 type MysqlBasePacket struct {
-	Len  []byte
-	Seq  byte
-	Data []byte
+	Len       []byte    // head: body length
+	Seq       byte      // head: sequence
+	Data      []byte    // body
+	Timestamp time.Time // timestamp this packet assembled
 }
 
 // ReadMysqlBasePacket read and parse mysql base packet from a reader
-func ReadMysqlBasePacket(reader *bufio.Reader) (*MysqlBasePacket, error) {
+func ReadMysqlBasePacket(r *ReaderStream) (*MysqlBasePacket, error) {
+	var err error
+	head := make([]byte, 4)
+	if _, err = io.ReadFull(r, head); err != nil {
+		return nil, err
+	}
+	packet := &MysqlBasePacket{Len: head[:3], Seq: head[3], Timestamp: r.Seen()}
+	// parse head[len(3)|seq(1)]
+	length := int(uint32(head[0]) | uint32(head[1])<<8 | uint32(head[2])<<16)
+	packet.Data = make([]byte, length)
+	if _, err = io.ReadFull(r, packet.Data); err != nil {
+		return nil, err
+	}
+	return packet, nil
+}
+
+/*func ReadMysqlBasePacket(reader *bufio.Reader) (*MysqlBasePacket, error) {
 	var err error
 	packet := &MysqlBasePacket{Len: make([]byte, 3)}
 	if _, err = reader.Read(packet.Len); err != nil {
@@ -36,7 +54,7 @@ func ReadMysqlBasePacket(reader *bufio.Reader) (*MysqlBasePacket, error) {
 		return nil, err
 	}
 	return packet, nil
-}
+}*/
 
 // MysqlPacket is the interface of MysqlRequestPacket and MysqlResponsePacket
 type MysqlPacket interface {
