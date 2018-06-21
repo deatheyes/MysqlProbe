@@ -262,10 +262,9 @@ func (c *Collector) Run() {
 				// merge summary info
 				for k, group := range report.Groups {
 					group.QPS = c.qps.AverageInSecond(k)
-					if group.QPS == 0 {
-						group.Overhead = -1
-					} else {
-						group.Overhead = c.overhead.AverageInSecond(k) / group.QPS
+					sum := c.qps.Sum(k)
+					if sum != 0 {
+						group.Overhead = c.overhead.Sum(k) / sum
 					}
 				}
 				if data, err := message.EncodeReportToBytes(report); err != nil {
