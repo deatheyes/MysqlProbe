@@ -169,12 +169,15 @@ func (b *bidi) run() {
 				// there is no need to build a message
 				waitting = packet
 				msg = &message.Message{}
+				glog.V(6).Infof("[worker %v] [prepare] sql: %v", b.wid, waitting.Sql())
 			case comStmtExecute:
 				waitting = packet
 				stmtID := packet.StmtID()
 				if _, ok := stmtmap[stmtID]; !ok {
 					// no stmt possible query error or sequence error
 					glog.V(5).Infof("[worker %v] no corresponding local statement found, stmtID: %v", b.wid, stmtID)
+				} else {
+					glog.V(6).Infof("[worker %v] [execute] stmtID: %v, sql: %v", b.wid, stmtID, stmtmap[stmtID])
 				}
 				msg = &message.Message{
 					SQL:          stmtmap[stmtID],
@@ -212,7 +215,8 @@ func (b *bidi) run() {
 						msg.ServerStatus = status.status
 						// if is a prepare request, register the sql and continue
 						if waitting.CMD() == comStmtPrepare {
-							stmtmap[waitting.StmtID()] = waitting.Sql()
+							glog.V(6).Infof("[worker %v] [prepare] response OK, stmtID: %v, sql: %v", b.wid, packet.StmtID, waitting.Sql)
+							stmtmap[packet.StmtID()] = waitting.Sql()
 							continue
 						}
 					case iERR:
@@ -227,7 +231,7 @@ func (b *bidi) run() {
 				// report.
 				b.out <- msg
 				waitting = nil
-				glog.V(5).Infof("[worker %v] mysql query parsed done: %v", msg, b.wid)
+				glog.V(6).Infof("[worker %v] mysql query parsed done: %v", msg, b.wid)
 			}
 		case <-b.stop:
 			return
