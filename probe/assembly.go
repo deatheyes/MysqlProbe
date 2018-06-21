@@ -127,14 +127,7 @@ func (b *bidi) shutdown() {
 
 	if !b.stopped {
 		b.stopped = true
-		// b.a should not be null, just in case.
 		close(b.stop)
-		if b.a != nil {
-			close(b.a.c)
-		}
-		if b.b != nil {
-			close(b.b.c)
-		}
 	}
 }
 
@@ -234,6 +227,15 @@ func (b *bidi) run() {
 				glog.V(6).Infof("[worker %v] mysql query parsed done: %v", msg, b.wid)
 			}
 		case <-b.stop:
+			if b.a != nil {
+				glog.V(5).Infof("[worker %v] bidi %v input stream shutdown", b.wid, b.key)
+				b.a.r.Close()
+			}
+			if b.b != nil {
+				glog.V(5).Infof("[worker %v] bidi %v output stream shutdown", b.wid, b.key)
+				b.b.r.Close()
+			}
+			glog.V(5).Infof("[worker %v] bidi %v shutdown", b.wid, b.key)
 			return
 		}
 	}
