@@ -6,7 +6,7 @@ import (
 	"github.com/golang/glog"
 )
 
-// dispatcher is a hub to serve websocket, it runs on every node in the cluster
+// Dispatcher is a hub to serve websocket, it runs on every node in the cluster
 type Dispatcher struct {
 	clients    map[*Client]bool // registered clients
 	broadcast  chan []byte      // inbound messages

@@ -75,7 +75,7 @@ This is the current struct of the Report:
 	// MessageGroup is the assembled info of a sql template
 	type MessageGroup struct {
 		QPS               int64      `json:"qps"`                       // current qps
-		Overhead          int64      `json:"avg_latency"`               // average latency
+		AverageLatency    int64      `json:"avg_latency"`               // average latency
 		SuccessCount      int        `json:"success"`                   // success query number
 		FailedCount       int        `json:"failed"`                    // failed query number
 		LastSeen          time.Time  `json:"last_seen"`                 // the latest timestamp

@@ -10,6 +10,7 @@ import (
 	"github.com/yanyu/MysqlProbe/config"
 )
 
+// Server manage all network input and output
 type Server struct {
 	dispatcher        *Dispatcher       // dispatcher to serve the client
 	collector         *Collector        // collector to gather message
@@ -17,6 +18,7 @@ type Server struct {
 	config            *config.Config    // config loaded form file
 }
 
+// NewServer create a server by config
 func NewServer(config *config.Config) *Server {
 	s := &Server{
 		dispatcher: NewDispatcher(),

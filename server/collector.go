@@ -36,7 +36,7 @@ type Collector struct {
 	disableConnection bool                  // true if disable to accept connection
 	configChanged     bool                  // reload flag
 	qps               *util.RollingNumber   // qps caculator
-	overhead          *util.RollingNumber   // overhead caculator
+	latency           *util.RollingNumber   // latency caculator
 
 	sync.Mutex
 }
@@ -44,7 +44,7 @@ type Collector struct {
 // NewCollector create a collecotr
 func NewCollector(report chan<- []byte, reportPeriod time.Duration, disableConnection bool) *Collector {
 	qps, _ := util.NewRollingNumber(10000, 100)
-	overhead, _ := util.NewRollingNumber(10000, 100)
+	latency, _ := util.NewRollingNumber(10000, 100)
 	return &Collector{
 		clients:           make(map[*Client]bool),
 		clientAddrs:       make(map[string]*Client),
@@ -61,7 +61,7 @@ func NewCollector(report chan<- []byte, reportPeriod time.Duration, disableConne
 		disableConnection: disableConnection,
 		configChanged:     false,
 		qps:               qps,
-		overhead:          overhead,
+		latency:           latency,
 	}
 }
 
@@ -245,7 +245,7 @@ func (c *Collector) Run() {
 			// caculate qps
 			for k, group := range r.Groups {
 				c.qps.Add(k, int64(group.SuccessCount+group.FailedCount))
-				c.overhead.Add(k, int64(group.SuccCostMsTotal+group.FailedCostMsTotal))
+				c.latency.Add(k, int64(group.SuccCostMsTotal+group.FailedCostMsTotal))
 			}
 		case m := <-c.messageIn:
 			glog.V(7).Info("collector merge message")
@@ -253,8 +253,8 @@ func (c *Collector) Run() {
 			report.AddMessage(m)
 			// caculate qps
 			c.qps.Add(m.SQL, 1)
-			// caculate overhead ms
-			c.overhead.Add(m.SQL, m.TimestampRsp.Sub(m.TimestampReq).Nanoseconds()/1000000)
+			// caculate latency ms
+			c.latency.Add(m.SQL, m.TimestampRsp.Sub(m.TimestampReq).Nanoseconds()/1000000)
 		case <-ticker.C:
 			glog.V(7).Info("collector flush report")
 			// report and flush merged data
@@ -264,7 +264,7 @@ func (c *Collector) Run() {
 					group.QPS = c.qps.AverageInSecond(k)
 					sum := c.qps.Sum(k)
 					if sum != 0 {
-						group.Overhead = c.overhead.Sum(k) / sum
+						group.AverageLatency = c.latency.Sum(k) / sum
 					}
 				}
 				if data, err := message.EncodeReportToBytes(report); err != nil {
