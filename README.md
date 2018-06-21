@@ -72,17 +72,6 @@ Data collected from slave or master will be reported in form of json. The report
 
 This is the current struct of the Report:
 
-	// Message is the info of a sql query
-	type Message struct {
-		SQL          string    `json:"sql"`           // templated sql.
-		Err          bool      `json:"error"`         // sql process error.
-		ErrMsg       string    `json:"error_message"` // sql process error message.
-		Errno        uint16    `json:"errno"`         // sql process error number.
-		ServerStatus uint16    `json:"server_status"` // server response status code.
-		AffectRows   uint64    `json:"affect_rows"`   // affect rows.
-		TimestampReq time.Time `json:"request_time"`  // timestamp for request package.
-		TimestampRsp time.Time `json:"rsponse_time"`  // timestamp for response package.
-	}
 	// MessageGroup is the assembled info of a sql template
 	type MessageGroup struct {
 		QPS               int64      `json:"qps"`                       // current qps
@@ -95,7 +84,6 @@ This is the current struct of the Report:
 		NoGoodIndexUsed   int64      `json:"status_no_good_index_used"` // count of SERVER_STATUS_NO_GOOD_INDEX_USED
 		NoIndexUsed       int64      `json:"status_no_index_used"`      // count of SERVER_STATUS_NO_INDEX_USED
 		QueryWasSlow      int64      `json:"status_query_was_slow"`     // count of SERVER_QUERY_WAS_SLOW
-		Messages          []*Message `json:"messages"`                  // detail info of the query, possibly removed later
 	}
 	// data reported to master or user
 	type Report struct {
