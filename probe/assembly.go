@@ -167,7 +167,7 @@ func (b *bidi) run() {
 				waitting = packet
 				stmtID := packet.StmtID()
 				if _, ok := stmtmap[stmtID]; !ok {
-					// no stmt possible query error or sequence error
+					// no stmt possible query error or sequence error。
 					glog.V(5).Infof("[worker %v] no corresponding local statement found, stmtID: %v", b.wid, stmtID)
 				} else {
 					glog.V(6).Infof("[worker %v] [execute] stmtID: %v, sql: %v", b.wid, stmtID, stmtmap[stmtID])
@@ -192,12 +192,10 @@ func (b *bidi) run() {
 				packet, err := rspPacket.ParseResponsePacket(waitting.CMD())
 				if err != nil {
 					glog.V(5).Infof("[worker %v] parse packet error: %v, ignored packet: %v", b.wid, err, rspPacket.Data)
+					// we don't need to reset the waitting packet here as the new request packet will replace it.
 					continue
 				}
-				if packet == nil {
-					glog.V(6).Infof("[worker %v] ignore packet: %v", b.wid, rspPacket.Data)
-					continue
-				}
+
 				msg.TimestampRsp = rspPacket.Timestamp
 				status := packet.Status()
 				if status != nil {
@@ -206,7 +204,7 @@ func (b *bidi) run() {
 						msg.Err = false
 						msg.AffectRows = status.affectedRows
 						msg.ServerStatus = status.status
-						// if is a prepare request, register the sql and continue
+						// if is a prepare request, register the sql and continue.
 						if waitting.CMD() == comStmtPrepare {
 							glog.V(6).Infof("[worker %v] [prepare] response OK, stmtID: %v, sql: %v", b.wid, packet.StmtID, waitting.Sql)
 							stmtmap[packet.StmtID()] = waitting.Sql()
@@ -217,13 +215,17 @@ func (b *bidi) run() {
 						msg.ErrMsg = status.message
 						msg.Errno = status.errno
 					default:
-						// not the reponse concerned
+						// not the reponse concerned.
 						continue
 					}
 				}
+				waitting = nil
+				// don't report those message without SQL.
+				if len(msg.SQL) == 0 {
+					continue
+				}
 				// report.
 				b.out <- msg
-				waitting = nil
 				glog.V(6).Infof("[worker %v] mysql query parsed done: %v", msg, b.wid)
 			}
 		case <-b.stop:
@@ -241,10 +243,10 @@ func (b *bidi) run() {
 	}
 }
 
-// IsRequest is a callback set by user to distinguish flow direction
+// IsRequest is a callback set by user to distinguish flow direction.
 type IsRequest func(netFlow, tcpFlow gopacket.Flow) bool
 
-// BidiFactory retains the basic data to create a bidi
+// BidiFactory retains the basic data to create a bidi.
 type BidiFactory struct {
 	bidiMap   map[Key]*bidi           // bidiMap maps keys to bidirectional stream pairs.
 	out       chan<- *message.Message // channle to report message.

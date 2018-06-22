@@ -146,7 +146,7 @@ func (p *MysqlResponsePacket) CMD() byte {
 
 var errNotEnouthData = errors.New("not enough data")
 var errStmtParsedFailed = errors.New("sql statemnet parsed failed")
-var errNotQuery = errors.New("not a query")
+var errNotConcerned = errors.New("not a concerned packet")
 var errNotMysqlPacket = errors.New("not a mysql packet")
 
 // MysqlResponseStatus retains parts of the query reponse data
@@ -203,13 +203,20 @@ func (p *MysqlBasePacket) ParseRequestPacket() (*MysqlRequestPacket, error) {
 		stmtID := uint32(p.Data[1]) | uint32(p.Data[2])<<8 | uint32(p.Data[3])<<16 | uint32(p.Data[4])<<24
 		return &MysqlRequestPacket{seq: p.Seq, cmd: comStmtExecute, stmtID: stmtID}, nil
 	default:
-		glog.V(8).Infof("not a query packet: %s", string(p.Data[1:]))
-		return nil, errNotQuery
+		return nil, errNotConcerned
 	}
 }
 
 // ParseResponsePacket distinguish OK packet, Err packet and Result set Packet
-func (p *MysqlBasePacket) ParseResponsePacket(reqType byte) (*MysqlResponsePacket, error) {
+func (p *MysqlBasePacket) ParseResponsePacket(reqType byte) (_ *MysqlResponsePacket, err error) {
+	// possible panic while processing length encoding, reover
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Warningf("[recover] parse response failed: %v", r)
+			err = r.(error)
+		}
+	}()
+
 	if len(p.Data) < 1 {
 		return nil, errNotEnouthData
 	}
@@ -222,7 +229,7 @@ func (p *MysqlBasePacket) ParseResponsePacket(reqType byte) (*MysqlResponsePacke
 		case comStmtPrepare:
 			return p.parsePrepareOK()
 		default:
-			return nil, nil
+			return nil, errNotConcerned
 		}
 	case iERR:
 		return p.parseResponseErr()
@@ -243,10 +250,6 @@ func (p *MysqlBasePacket) parsePrepareOK() (*MysqlResponsePacket, error) {
 func (p *MysqlBasePacket) parseResponseOK() (*MysqlResponsePacket, error) {
 	var n, m int
 	status := &MysqlResponseStatus{flag: p.Data[0]}
-	if len(p.Data) == 1 {
-		// OK packet without extend info
-		return &MysqlResponsePacket{seq: p.Seq, status: status}, nil
-	}
 	// OK packet with extend info
 	status.affectedRows, _, n = util.ReadLengthEncodedInteger(p.Data[1:])
 	status.insertID, _, m = util.ReadLengthEncodedInteger(p.Data[1+n:])
