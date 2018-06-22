@@ -1,3 +1,12 @@
+// Package probe classifies the packets into stream according to network flow and transport flow.
+//                                                     stream(network1:transport1)\
+//                                                   /                             \
+//                               / hash(network flow)- stream(network2:transport1)- \
+// packet-> hash(transport flow)                                                     messages
+//                               \ hash(network flow)- stream(network3:transport2)- /
+//                                                   \                             /
+//                                                     stream(network4:transport2)/
+//                                |               tcp assembly                   |
 package probe
 
 import (
@@ -103,8 +112,8 @@ func (p *Probe) Run() {
 			glog.Warning("unexpected packet")
 			continue
 		}
-		// dispatch packet by stream network flow.
-		id := int(packet.NetworkLayer().NetworkFlow().FastHash() % uint64(p.workerNum))
+		// dispatch packet by stream transport flow.
+		id := int(packet.TransportLayer().TransportFlow().FastHash() % uint64(p.workerNum))
 		p.workers[id].in <- packet
 	}
 }
