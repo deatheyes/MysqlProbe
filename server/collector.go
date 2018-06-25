@@ -248,7 +248,7 @@ func (c *Collector) Run() {
 				c.latency.Add(k, int64(group.SuccCostMsTotal+group.FailedCostMsTotal))
 			}
 		case m := <-c.messageIn:
-			glog.V(7).Info("collector merge message")
+			glog.V(7).Infof("[collector] merge message: %v", m.SQL)
 			// merge collected messages, used by slave
 			report.AddMessage(m)
 			// caculate qps

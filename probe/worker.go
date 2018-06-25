@@ -2,6 +2,7 @@ package probe
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -21,17 +22,19 @@ type Worker struct {
 	id           int                     // worker id.
 	logAllPacket bool                    // wether to log the paocket.
 	interval     time.Duration           // flush interval.
+	name         string                  // worker name for logging.
 }
 
 // NewProbeWorker create a new woker to assemble tcp data
-func NewProbeWorker(prbe *Probe, out chan<- *message.Message, id int, interval time.Duration, logAllPacket bool) *Worker {
+func NewProbeWorker(probe *Probe, out chan<- *message.Message, id int, interval time.Duration, logAllPacket bool) *Worker {
 	p := &Worker{
-		owner:        prbe,
+		owner:        probe,
 		in:           make(chan gopacket.Packet),
 		out:          out,
 		id:           id,
 		interval:     interval,
 		logAllPacket: logAllPacket,
+		name:         fmt.Sprintf("%v-%v", probe.device, id),
 	}
 	go p.Run()
 	return p
@@ -45,7 +48,7 @@ func (w *Worker) Run() {
 		return w.owner.IsRequest(ip.String(), binary.BigEndian.Uint16(port.Raw()))
 	}
 
-	streamFactory := &BidiFactory{bidiMap: make(map[Key]*bidi), out: w.out, isRequest: f, wid: w.id}
+	streamFactory := &BidiFactory{bidiMap: make(map[Key]*bidi), out: w.out, isRequest: f, wname: w.name}
 	streamPool := tcpassembly.NewStreamPool(streamFactory)
 	assembler := tcpassembly.NewAssembler(streamPool)
 	assembler.MaxBufferedPagesTotal = 100000

@@ -234,7 +234,7 @@ func (p *MysqlBasePacket) ParseResponsePacket(reqType byte) (_ *MysqlResponsePac
 	case iERR:
 		return p.parseResponseErr()
 	default:
-		return &MysqlResponsePacket{seq: p.Seq}, nil
+		return &MysqlResponsePacket{seq: p.Seq, status: &MysqlResponseStatus{flag: p.Data[0]}}, nil
 	}
 }
 
