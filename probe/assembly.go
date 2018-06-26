@@ -58,7 +58,6 @@ func NewMysqlStream(bidi *bidi, client bool) *MysqlStream {
 
 func (s *MysqlStream) run() {
 	buf := bufio.NewReader(&s.r)
-	count := 0
 	for {
 		base, err := ReadMysqlBasePacket(buf)
 		//base, err := ReadMysqlBasePacket(&s.r)
@@ -81,8 +80,7 @@ func (s *MysqlStream) run() {
 		}
 
 		// Warning for possible blocking
-		if len(s.c) > 200 && count%500 == 0 {
-			count++
+		if len(s.c) > 200 {
 			glog.Warningf("[%v] stream has %v watting packets, watch out for possible blocking", s.name, len(s.c))
 		}
 		select {
@@ -221,6 +219,11 @@ func (b *bidi) run() {
 				packet, err := rspPacket.ParseResponsePacket(waitting.CMD())
 				if err != nil {
 					glog.V(5).Infof("[%v] parse packet error: %v, ignored packet: %v", b.name, err, rspPacket.Data)
+					continue
+				}
+
+				if waitting.Seq()+1 != packet.Seq() {
+					// not the peer
 					continue
 				}
 
@@ -388,10 +391,10 @@ func (f *BidiFactory) New(netFlow, tcpFlow gopacket.Flow) tcpassembly.Stream {
 		s = NewMysqlStream(bd, f.isRequest(netFlow, tcpFlow))
 		reverse := Key{netFlow.Reverse(), tcpFlow.Reverse()}
 		glog.Infof("[%s] created request side of bidirectional stream %s", f.wname, bd.key)
-		if v := f.bidiMap[reverse]; v != nil {
+		/*if v := f.bidiMap[reverse]; v != nil {
 			// shutdown the Orphan bidi.
 			v.shutdown()
-		}
+		}*/
 		// Register bidirectional with the reverse key, so the matching stream going
 		// the other direction will find it.
 		f.bidiMap[reverse] = bd
