@@ -57,6 +57,7 @@ func NewMysqlStream(bidi *bidi, client bool) *MysqlStream {
 
 func (s *MysqlStream) run() {
 	//buf := bufio.NewReader(&s.r)
+	count := 0
 	for {
 		//base, err := ReadMysqlBasePacket(buf)
 		base, err := ReadMysqlBasePacket(&s.r)
@@ -69,13 +70,22 @@ func (s *MysqlStream) run() {
 			return
 		}
 
-		if (s.client && base.Seq != 0) || (!s.client && base.Seq != 1) {
-			// skip the packets after the first one
-			continue
+		// filter the packets not concerned, skip ASAP
+		if s.client {
+			if base.Data[0] != comQuery && base.Data[0] != comStmtPrepare && base.Data[0] != comStmtExecute {
+				// not the packet concerned, skip ASAP
+				continue
+			}
+		} else {
+			if base.Seq == 0 {
+				continue
+			}
 		}
+
 		// Warning for possible blocking
-		if len(s.c) > 200 {
-			glog.Warningf("[%v-%v] stream has more than 200 watting packets, watch out for possible blocking", s.bidi.name, s.name)
+		if len(s.c) > 200 && count%500 == 0 {
+			count++
+			glog.Warningf("[%v] stream has %v watting packets, watch out for possible blocking", s.name, len(s.c))
 		}
 		select {
 		case <-s.stop:
@@ -167,7 +177,7 @@ func (b *bidi) run() {
 			msg = &message.Message{TimestampReq: reqPacket.Timestamp}
 			switch packet.CMD() {
 			case comQuery:
-				// this is an raw sql query
+				// this is a raw sql query
 				waitting = packet
 				msg.SQL = generateQuery(packet.Stmt(), true)
 			case comStmtPrepare:
