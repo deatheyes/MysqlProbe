@@ -1,9 +1,9 @@
 package probe
 
 import (
+	"bufio"
 	"encoding/binary"
 	"errors"
-	"io"
 	"time"
 
 	"github.com/golang/glog"
@@ -21,7 +21,7 @@ type MysqlBasePacket struct {
 }
 
 // ReadMysqlBasePacket read and parse mysql base packet from a reader
-func ReadMysqlBasePacket(r *ReaderStream) (*MysqlBasePacket, error) {
+/*func ReadMysqlBasePacket(r *ReaderStream) (*MysqlBasePacket, error) {
 	var err error
 	head := make([]byte, 4)
 	if _, err = io.ReadFull(r, head); err != nil {
@@ -35,9 +35,9 @@ func ReadMysqlBasePacket(r *ReaderStream) (*MysqlBasePacket, error) {
 		return nil, err
 	}
 	return packet, nil
-}
-
-/*func ReadMysqlBasePacket(reader *bufio.Reader) (*MysqlBasePacket, error) {
+}*/
+// ReadMysqlBasePacket read and parse mysql base packet from a reader
+func ReadMysqlBasePacket(reader *bufio.Reader) (*MysqlBasePacket, error) {
 	var err error
 	packet := &MysqlBasePacket{Len: make([]byte, 3)}
 	if _, err = reader.Read(packet.Len); err != nil {
@@ -54,7 +54,7 @@ func ReadMysqlBasePacket(r *ReaderStream) (*MysqlBasePacket, error) {
 		return nil, err
 	}
 	return packet, nil
-}*/
+}
 
 // MysqlPacket is the interface of MysqlRequestPacket and MysqlResponsePacket
 type MysqlPacket interface {

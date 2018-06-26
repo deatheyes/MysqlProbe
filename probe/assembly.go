@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"sync"
@@ -56,11 +57,11 @@ func NewMysqlStream(bidi *bidi, client bool) *MysqlStream {
 }
 
 func (s *MysqlStream) run() {
-	//buf := bufio.NewReader(&s.r)
+	buf := bufio.NewReader(&s.r)
 	count := 0
 	for {
-		//base, err := ReadMysqlBasePacket(buf)
-		base, err := ReadMysqlBasePacket(&s.r)
+		base, err := ReadMysqlBasePacket(buf)
+		//base, err := ReadMysqlBasePacket(&s.r)
 		if err == io.EOF {
 			// We must read until we see an EOF... very important!
 			return
