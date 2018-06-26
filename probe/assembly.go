@@ -116,7 +116,35 @@ func newbidi(key Key, out chan<- *message.Message, wname string) *bidi {
 		name:    fmt.Sprintf("%s-%s", wname, key),
 	}
 	go b.run()
+	go b.easyBlocking()
 	return b
+}
+
+func (b *bidi) easyBlocking() {
+	ticker := time.NewTicker(time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			reqlen := len(b.req)
+			rsplen := len(b.rsp)
+			if reqlen > 100 || rsplen > 100 {
+				// flush half of the current data
+				glog.Warningf("flush blocking packet, data lost, request: %v, response: %v", reqlen, rsplen)
+				go func(length int) {
+					for i := 0; i < length; i++ {
+						<-b.req
+					}
+				}(reqlen / 2)
+				go func(length int) {
+					for i := 0; i < length; i++ {
+						<-b.rsp
+					}
+				}(rsplen / 2)
+			}
+		case <-b.stop:
+			return
+		}
+	}
 }
 
 func (b *bidi) shutdown() {
@@ -264,107 +292,6 @@ func (b *bidi) run() {
 		}
 	}
 }
-
-/*func (b *bidi) run() {
-	var msg *message.Message           // message to report
-	var waitting MysqlPacket           // request waiting for response
-	stmtmap := make(map[uint32]string) // map to register the statement
-
-	for {
-		select {
-		case reqPacket := <-b.req:
-			glog.V(8).Infof("[worker %v] request packet received", b.wid)
-			// update expireation timestamp.
-			b.updateTimestamp(reqPacket.Timestamp)
-
-			if reqPacket.Seq != 0 {
-				glog.V(6).Infof("[worker %v] not the fist packet of request: %v", b.wid, reqPacket.Data)
-			}
-
-			// TODO: parse transaction
-			packet, err := reqPacket.ParseRequestPacket()
-			if err != nil {
-				glog.V(5).Infof("[worker %v] parse packet error: %v, ignored packet: %v", b.wid, err, reqPacket.Data)
-				continue
-			}
-			msg = &message.Message{TimestampReq: reqPacket.Timestamp}
-			switch packet.CMD() {
-			case comQuery:
-				// this is an raw sql query
-				waitting = packet
-				msg.SQL = generateQuery(packet.Stmt(), true)
-			case comStmtPrepare:
-				// the statement will be registered if processed OK
-				waitting = packet
-				glog.V(6).Infof("[worker %v] [prepare] sql: %v", b.wid, waitting.Sql())
-			case comStmtExecute:
-				waitting = packet
-				stmtID := packet.StmtID()
-				if _, ok := stmtmap[stmtID]; !ok {
-					// no stmt possible query error or sequence error。
-					glog.V(5).Infof("[worker %v] no corresponding local statement found, stmtID: %v", b.wid, stmtID)
-				} else {
-					glog.V(6).Infof("[worker %v] [execute] stmtID: %v, sql: %v", b.wid, stmtID, stmtmap[stmtID])
-					msg.SQL = stmtmap[stmtID]
-				}
-			}
-		case rspPacket := <-b.rsp:
-			glog.V(8).Infof("[worker %v] response packet received", b.wid)
-			// update expireation timestamp.
-			b.updateTimestamp(rspPacket.Timestamp)
-			if b.lastPacketSeen.After(rspPacket.Timestamp) {
-				// this is an expired packet or a sub packet
-				glog.V(8).Infof("[worker %v] found a useless or expired packet", b.wid)
-				continue
-			}
-
-			// if there is a request waitting, this packet is possible the first packet of response.
-			if waitting != nil {
-				packet, err := rspPacket.ParseResponsePacket(waitting.CMD())
-				if err != nil {
-					glog.V(5).Infof("[worker %v] parse packet error: %v, ignored packet: %v", b.wid, err, rspPacket.Data)
-					// we don't need to reset the waitting packet here as the new request packet will replace it.
-					continue
-				}
-
-				msg.TimestampRsp = rspPacket.Timestamp
-				status := packet.Status()
-				if status != nil {
-					switch status.flag {
-					case iOK:
-						msg.Err = false
-						msg.AffectRows = status.affectedRows
-						msg.ServerStatus = status.status
-						// if is a prepare request, register the sql and continue.
-						if waitting.CMD() == comStmtPrepare {
-							glog.V(6).Infof("[worker %v] [prepare] response OK, stmtID: %v, sql: %v", b.wid, packet.StmtID, waitting.Sql())
-							stmtmap[packet.StmtID()] = waitting.Sql()
-						}
-					case iERR:
-						msg.Err = true
-						msg.ErrMsg = status.message
-						msg.Errno = status.errno
-					default:
-						// not the reponse concerned.
-						continue
-					}
-				}
-				waitting = nil
-				// don't report those message without SQL.
-				// there is no SQL in prepare message.
-				if len(msg.SQL) == 0 {
-					continue
-				}
-				// report.
-				glog.V(7).Infof("[worker %v] mysql query parsed done: %v, bidi: %v", b.wid, msg.SQL, b.key)
-				b.out <- msg
-			}
-		case <-b.stop:
-			b.close()
-			return
-		}
-	}
-}*/
 
 // IsRequest is a callback set by user to distinguish flow direction.
 type IsRequest func(netFlow, tcpFlow gopacket.Flow) bool
