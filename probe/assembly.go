@@ -403,3 +403,15 @@ func (f *BidiFactory) New(netFlow, tcpFlow gopacket.Flow) tcpassembly.Stream {
 	}
 	return &s.r
 }
+
+func (f *BidiFactory) collectOldStreams(timeout time.Duration) {
+	cutoff := time.Now().Add(-timeout)
+	for k, bd := range f.bidiMap {
+		if bd.lastPacketSeen.Before(cutoff) {
+			glog.Infof("[%v] timing out old stream %v", f.wname, bd.key)
+			// just remove it from our map.
+			// bidi will shutdown when either stream come up with a EOF
+			delete(f.bidiMap, k)
+		}
+	}
+}
