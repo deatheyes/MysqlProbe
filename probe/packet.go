@@ -255,7 +255,7 @@ func (p *MysqlBasePacket) ParseResponsePacket(reqType byte) (_ *MysqlResponsePac
 
 func (p *MysqlBasePacket) parsePrepareOK() (*MysqlResponsePacket, error) {
 	status := &MysqlResponseStatus{flag: p.Data[0]}
-	if len(p.Data) < 5 {
+	if len(p.Data) != 12 {
 		return nil, errNotEnouthData
 	}
 	status.stmtID = binary.LittleEndian.Uint32(p.Data[1:5])
