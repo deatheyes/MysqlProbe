@@ -228,8 +228,10 @@ func (p *MysqlBasePacket) ParseResponsePacket(reqType byte) (_ *MysqlResponsePac
 			return p.parseResponseOK()
 		case comStmtPrepare:
 			return p.parsePrepareOK()
+		case comStmtExecute:
+			return p.parseResponseOK()
 		default:
-			return nil, errNotConcerned
+			return p.parseResponseOK()
 		}
 	case iERR:
 		return p.parseResponseErr()

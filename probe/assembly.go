@@ -76,10 +76,6 @@ func (s *MysqlStream) run() {
 				// not the packet concerned, skip ASAP
 				continue
 			}
-		} else {
-			if base.Seq == 0 {
-				continue
-			}
 		}
 
 		// Warning for possible blocking
