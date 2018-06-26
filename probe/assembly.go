@@ -64,6 +64,7 @@ func (s *MysqlStream) run() {
 		//base, err := ReadMysqlBasePacket(&s.r)
 		if err == io.EOF {
 			// We must read until we see an EOF... very important!
+			s.bidi.shutdown()
 			return
 		} else if err != nil {
 			// not mysql protocal.
@@ -401,15 +402,4 @@ func (f *BidiFactory) New(netFlow, tcpFlow gopacket.Flow) tcpassembly.Stream {
 		delete(f.bidiMap, k)
 	}
 	return &s.r
-}
-
-func (f *BidiFactory) collectOldStreams(timeout time.Duration) {
-	cutoff := time.Now().Add(-timeout)
-	for k, bd := range f.bidiMap {
-		if bd.lastPacketSeen.Before(cutoff) {
-			glog.Infof("[%v] timing out old stream %v", f.wname, bd.key)
-			delete(f.bidiMap, k) // remove it from our map.
-			bd.shutdown()        // if b was the last stream we were waiting for, finish up.
-		}
-	}
 }

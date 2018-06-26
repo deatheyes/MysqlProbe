@@ -242,11 +242,11 @@ func (p *MysqlBasePacket) ParseResponsePacket(reqType byte) (_ *MysqlResponsePac
 	case comStmtExecute:
 		switch p.Data[0] {
 		case iOK:
-			return p.parsePrepareOK()
+			return p.parseResponseOK()
 		case iERR:
 			return p.parseResponseErr()
 		default:
-			return nil, errNotConcerned
+			return &MysqlResponsePacket{seq: p.Seq, status: &MysqlResponseStatus{flag: p.Data[0]}}, nil
 		}
 	default:
 		return nil, errNotConcerned
@@ -258,7 +258,7 @@ func (p *MysqlBasePacket) parsePrepareOK() (*MysqlResponsePacket, error) {
 	if len(p.Data) < 5 {
 		return nil, errNotEnouthData
 	}
-	status.stmtID = uint32(p.Data[1]) | uint32(p.Data[2])<<8 | uint32(p.Data[3])<<16 | uint32(p.Data[4])<<24
+	status.stmtID = binary.LittleEndian.Uint32(p.Data[1:5])
 	return &MysqlResponsePacket{seq: p.Seq, status: status}, nil
 }
 

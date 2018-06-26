@@ -75,7 +75,6 @@ func (w *Worker) Run() {
 				count = 0
 				glog.V(8).Infof("[worker %v] flush for clean up", w.id)
 				assembler.FlushOlderThan(time.Now().Add(-(10 * w.interval)))
-				streamFactory.collectOldStreams((10 * w.interval))
 			} else {
 				glog.V(8).Infof("[worker %v] flush for parse", w.id)
 				assembler.FlushWithOptions(tcpassembly.FlushOptions{CloseAll: false, T: time.Now().Add(-w.interval)})
