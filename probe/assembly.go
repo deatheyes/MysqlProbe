@@ -205,56 +205,61 @@ func (b *bidi) run() {
 		}
 
 		// find response
-		select {
-		case rspPacket := <-b.rsp:
-			glog.V(8).Infof("[%v] response packet received", b.name)
-			// update expireation timestamp.
-			b.updateTimestamp(rspPacket.Timestamp)
+	findResponse:
+		for {
+			select {
+			case rspPacket := <-b.rsp:
+				glog.V(8).Infof("[%v] response packet received", b.name)
+				// update expireation timestamp.
+				b.updateTimestamp(rspPacket.Timestamp)
 
-			if msg.TimestampReq.After(rspPacket.Timestamp) {
-				// this is an expired packet or a sub packet
-				glog.V(8).Infof("[%v] found a useless or expired packet", b.name)
-				continue
-			}
-
-			// parse response packet
-			packet, err := rspPacket.ParseResponsePacket(waitting.CMD())
-			if err != nil {
-				glog.V(5).Infof("[%v] parse packet error: %v, ignored packet: %v", b.name, err, rspPacket.Data)
-				continue
-			}
-
-			msg.TimestampRsp = rspPacket.Timestamp
-			status := packet.Status()
-			switch status.flag {
-			case iOK:
-				msg.Err = false
-				msg.AffectRows = status.affectedRows
-				msg.ServerStatus = status.status
-				// if is a prepare request, register the sql and continue.
-				if waitting.CMD() == comStmtPrepare {
-					glog.V(6).Infof("[%v] [prepare] response OK, stmtID: %v, sql: %v", b.name, packet.StmtID, waitting.Sql())
-					stmtmap[packet.StmtID()] = waitting.Sql()
+				if msg.TimestampReq.After(rspPacket.Timestamp) {
+					// this is an expired packet or a sub packet
+					glog.V(8).Infof("[%v] found a useless or expired packet", b.name)
+					continue
 				}
-			case iERR:
-				msg.Err = true
-				msg.ErrMsg = status.message
-				msg.Errno = status.errno
-			default:
-				// response for SELECT
-				msg.Err = false
-			}
 
-			// don't report those message without SQL.
-			// there is no SQL in prepare message
-			if len(msg.SQL) != 0 {
-				// report
-				glog.V(6).Infof("[%v] mysql query parsed done: %v", b.name, msg.SQL)
-				b.out <- msg
+				// parse response packet
+				packet, err := rspPacket.ParseResponsePacket(waitting.CMD())
+				if err != nil {
+					glog.V(5).Infof("[%v] parse packet error: %v, ignored packet: %v", b.name, err, rspPacket.Data)
+					continue
+				}
+
+				msg.TimestampRsp = rspPacket.Timestamp
+				status := packet.Status()
+				switch status.flag {
+				case iOK:
+					msg.Err = false
+					msg.AffectRows = status.affectedRows
+					msg.ServerStatus = status.status
+					// if is a prepare request, register the sql and continue.
+					if waitting.CMD() == comStmtPrepare {
+						glog.V(6).Infof("[%v] [prepare] response OK, stmtID: %v, sql: %v", b.name, packet.StmtID(), waitting.Sql())
+						stmtmap[packet.StmtID()] = waitting.Sql()
+					}
+				case iERR:
+					msg.Err = true
+					msg.ErrMsg = status.message
+					msg.Errno = status.errno
+				default:
+					// response for SELECT
+					msg.Err = false
+				}
+
+				// don't report those message without SQL.
+				// there is no SQL in prepare message.
+				// need more precise filter about control command such as START, END
+				if len(msg.SQL) > 5 {
+					// report
+					glog.V(6).Infof("[%v] mysql query parsed done: %v", b.name, msg.SQL)
+					b.out <- msg
+				}
+				break findResponse
+			case <-b.stop:
+				b.close()
+				return
 			}
-		case <-b.stop:
-			b.close()
-			return
 		}
 	}
 }
