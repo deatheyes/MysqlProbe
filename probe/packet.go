@@ -220,23 +220,36 @@ func (p *MysqlBasePacket) ParseResponsePacket(reqType byte) (_ *MysqlResponsePac
 	if len(p.Data) < 1 {
 		return nil, errNotEnouthData
 	}
-
-	switch p.Data[0] {
-	case iOK:
-		switch reqType {
-		case comQuery:
+	switch reqType {
+	case comQuery:
+		switch p.Data[0] {
+		case iOK:
 			return p.parseResponseOK()
-		case comStmtPrepare:
-			return p.parsePrepareOK()
-		case comStmtExecute:
-			return p.parseResponseOK()
+		case iERR:
+			return p.parseResponseErr()
 		default:
-			return p.parseResponseOK()
+			return &MysqlResponsePacket{seq: p.Seq, status: &MysqlResponseStatus{flag: p.Data[0]}}, nil
 		}
-	case iERR:
-		return p.parseResponseErr()
+	case comStmtPrepare:
+		switch p.Data[0] {
+		case iOK:
+			return p.parsePrepareOK()
+		case iERR:
+			return p.parseResponseErr()
+		default:
+			return nil, errNotConcerned
+		}
+	case comStmtExecute:
+		switch p.Data[0] {
+		case iOK:
+			return p.parsePrepareOK()
+		case iERR:
+			return p.parseResponseErr()
+		default:
+			return nil, errNotConcerned
+		}
 	default:
-		return &MysqlResponsePacket{seq: p.Seq, status: &MysqlResponseStatus{flag: p.Data[0]}}, nil
+		return nil, errNotConcerned
 	}
 }
 
