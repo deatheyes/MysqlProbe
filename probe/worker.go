@@ -31,7 +31,6 @@ func NewProbeWorker(probe *Probe, out chan<- *message.Message, id int, interval 
 		owner:        probe,
 		in:           make(chan gopacket.Packet),
 		out:          out,
-		id:           id,
 		interval:     interval,
 		logAllPacket: logAllPacket,
 		name:         fmt.Sprintf("%v-%v", probe.device, id),

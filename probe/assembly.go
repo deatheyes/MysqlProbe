@@ -77,15 +77,16 @@ func (s *MysqlStream) run() {
 		if s.client {
 			if base.Data[0] != comQuery && base.Data[0] != comStmtPrepare && base.Data[0] != comStmtExecute {
 				// not the packet concerned, skip ASAP
+				glog.V(7).Infof("discard request packet, seq: %d, data: %v", base.Seq, base.Data)
 				continue
 			}
 			if base.Seq != 0 {
-				glog.V(6).Infof("discard request packet, seq: %d, data: %v", base.Seq, base.Data)
+				glog.V(7).Infof("discard request packet, seq: %d, data: %v", base.Seq, base.Data)
 				continue
 			}
 		} else if base.Seq != 1 {
 			// only care about the first packet of response
-			glog.V(6).Infof("discard response packet, seq: %d, data: %v", base.Seq, base.Data)
+			glog.V(7).Infof("discard response packet, seq: %d, data: %v", base.Seq, base.Data)
 			continue
 		}
 

@@ -30,7 +30,7 @@ type Probe struct {
 	port      uint16                  // probe port.
 	filter    string                  // bpf filter.
 	inited    bool                    // flag if could be run.
-	workers   []*Worker               // probe worker group processing packet.
+	workers   map[Key]*Worker         // probe worker group processing packet.
 	workerNum int                     // worker number.
 	out       chan<- *message.Message // data collect channel.
 }
@@ -44,6 +44,7 @@ func NewProbe(device string, snapLen int32, port uint16, workerNum int, out chan
 		inited:    false,
 		workerNum: workerNum,
 		out:       out,
+		workers:   make(map[Key]*Worker),
 	}
 	return p
 }
@@ -83,17 +84,12 @@ func (p *Probe) String() string {
 
 // Run starts the probe after inited
 func (p *Probe) Run() {
-	// create workers.
 	if !p.inited {
 		glog.Fatal("probe not inited")
 		return
 	}
 
 	glog.Infof("probe run - %s", p)
-	for i := 0; i < p.workerNum; i++ {
-		w := NewProbeWorker(p, p.out, i, time.Second, false)
-		p.workers = append(p.workers, w)
-	}
 
 	// run probe.
 	handle, err := pcap.OpenLive(p.device, p.snapLen, true, pcap.BlockForever)
@@ -106,6 +102,7 @@ func (p *Probe) Run() {
 		return
 	}
 
+	id := 0
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for packet := range packetSource.Packets() {
 		if packet.NetworkLayer() == nil || packet.TransportLayer() == nil || packet.TransportLayer().LayerType() != layers.LayerTypeTCP {
@@ -113,7 +110,18 @@ func (p *Probe) Run() {
 			continue
 		}
 		// dispatch packet by stream transport flow.
-		id := int(packet.TransportLayer().TransportFlow().FastHash() % uint64(p.workerNum))
-		p.workers[id].in <- packet
+		//id := int(packet.TransportLayer().TransportFlow().FastHash() % uint64(p.workerNum))
+		key1 := Key{packet.NetworkLayer().NetworkFlow(), packet.TransportLayer().TransportFlow()}
+		key2 := Key{packet.NetworkLayer().NetworkFlow().Reverse(), packet.TransportLayer().TransportFlow().Reverse()}
+		if p.workers[key1] != nil {
+			p.workers[key1].in <- packet
+		} else if p.workers[key2] != nil {
+			p.workers[key2].in <- packet
+		} else {
+			w := NewProbeWorker(p, p.out, id, time.Second, false)
+			p.workers[key1] = w
+			w.in <- packet
+			id++
+		}
 	}
 }
