@@ -145,8 +145,7 @@ func (p *MysqlResponsePacket) CMD() byte {
 }
 
 var errNotEnouthData = errors.New("not enough data")
-var errStmtParsedFailed = errors.New("sql statemnet parsed failed")
-var errNotConcerned = errors.New("not a concerned packet")
+var errParsedFailed = errors.New("parsed failed")
 var errNotMysqlPacket = errors.New("not a mysql packet")
 
 // MysqlResponseStatus retains parts of the query reponse data
@@ -190,7 +189,7 @@ func (p *MysqlBasePacket) ParseRequestPacket() (*MysqlRequestPacket, error) {
 		stmt, err := sqlparser.Parse(string(p.Data[1:]))
 		if err != nil || stmt == nil {
 			glog.V(8).Infof("possible not a request packet, prase statement failed: %v", err)
-			return nil, errStmtParsedFailed
+			return nil, errParsedFailed
 		}
 		return &MysqlRequestPacket{seq: p.Seq, cmd: comQuery, sql: p.Data[1:], stmt: stmt}, nil
 	case comStmtPrepare:
@@ -203,7 +202,7 @@ func (p *MysqlBasePacket) ParseRequestPacket() (*MysqlRequestPacket, error) {
 		stmtID := uint32(p.Data[1]) | uint32(p.Data[2])<<8 | uint32(p.Data[3])<<16 | uint32(p.Data[4])<<24
 		return &MysqlRequestPacket{seq: p.Seq, cmd: comStmtExecute, stmtID: stmtID}, nil
 	default:
-		return nil, errNotConcerned
+		return nil, errParsedFailed
 	}
 }
 
@@ -222,47 +221,26 @@ func (p *MysqlBasePacket) ParseResponsePacket(reqType byte) (_ *MysqlResponsePac
 	}
 	switch reqType {
 	case comQuery:
-		switch p.Data[0] {
-		case iOK:
-			return p.parseResponseOK()
-		case iERR:
-			return p.parseResponseErr()
-		default:
-			return &MysqlResponsePacket{seq: p.Seq, status: &MysqlResponseStatus{flag: p.Data[0]}}, nil
-		}
+		return p.parseResultSetHeader()
 	case comStmtPrepare:
-		switch p.Data[0] {
-		case iOK:
-			return p.parsePrepareOK()
-		case iERR:
-			return p.parseResponseErr()
-		default:
-			return nil, errNotConcerned
-		}
+		return p.parsePrepare()
 	case comStmtExecute:
-		switch p.Data[0] {
-		case iOK:
-			return p.parseResponseOK()
-		case iERR:
-			return p.parseResponseErr()
-		default:
-			return &MysqlResponsePacket{seq: p.Seq, status: &MysqlResponseStatus{flag: p.Data[0]}}, nil
-		}
+		return p.parseResultSetHeader()
 	default:
-		return nil, errNotConcerned
+		return nil, errParsedFailed
 	}
 }
 
 func (p *MysqlBasePacket) parsePrepareOK() (*MysqlResponsePacket, error) {
 	status := &MysqlResponseStatus{flag: p.Data[0]}
 	if len(p.Data) != 12 {
-		return nil, errNotEnouthData
+		return nil, errParsedFailed
 	}
 	status.stmtID = binary.LittleEndian.Uint32(p.Data[1:5])
 	return &MysqlResponsePacket{seq: p.Seq, status: status}, nil
 }
 
-func (p *MysqlBasePacket) parseResponseOK() (*MysqlResponsePacket, error) {
+func (p *MysqlBasePacket) parseOK() (*MysqlResponsePacket, error) {
 	var n, m int
 	status := &MysqlResponseStatus{flag: p.Data[0]}
 	// OK packet with extend info
@@ -272,7 +250,7 @@ func (p *MysqlBasePacket) parseResponseOK() (*MysqlResponsePacket, error) {
 	return &MysqlResponsePacket{seq: p.Seq, status: status}, nil
 }
 
-func (p *MysqlBasePacket) parseResponseErr() (*MysqlResponsePacket, error) {
+func (p *MysqlBasePacket) parseErr() (*MysqlResponsePacket, error) {
 	status := &MysqlResponseStatus{flag: p.Data[0]}
 	status.errno = binary.LittleEndian.Uint16(p.Data[1:3])
 	pos := 3
@@ -283,4 +261,37 @@ func (p *MysqlBasePacket) parseResponseErr() (*MysqlResponsePacket, error) {
 	}
 	status.message = string(p.Data[pos:])
 	return &MysqlResponsePacket{seq: p.Seq, status: status}, nil
+}
+
+func (p *MysqlBasePacket) parseLocalInFile() (*MysqlResponsePacket, error) {
+	return &MysqlResponsePacket{seq: p.Seq, status: &MysqlResponseStatus{flag: p.Data[0]}}, nil
+}
+
+func (p *MysqlBasePacket) parseResultSetHeader() (*MysqlResponsePacket, error) {
+	switch p.Data[0] {
+	case iOK:
+		return p.parseOK()
+	case iERR:
+		return p.parseErr()
+	case iLocalInFile:
+		return p.parseLocalInFile()
+	}
+
+	// column count
+	_, _, n := util.ReadLengthEncodedInteger(p.Data)
+	if n-len(p.Data) == 0 {
+		return &MysqlResponsePacket{seq: p.Seq, status: &MysqlResponseStatus{flag: p.Data[0]}}, nil
+	}
+	return nil, errParsedFailed
+}
+
+func (p *MysqlBasePacket) parsePrepare() (*MysqlResponsePacket, error) {
+	switch p.Data[0] {
+	case iOK:
+		return p.parsePrepareOK()
+	case iERR:
+		return p.parseErr()
+	default:
+		return nil, errParsedFailed
+	}
 }

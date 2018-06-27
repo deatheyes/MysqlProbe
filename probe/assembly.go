@@ -63,7 +63,9 @@ func (s *MysqlStream) run() {
 		//base, err := ReadMysqlBasePacket(&s.r)
 		if err == io.EOF {
 			// We must read until we see an EOF... very important!
-			s.bidi.shutdown()
+			// currently disable, possible blocking
+			// TODO: slove it
+			//s.bidi.shutdown()
 			return
 		} else if err != nil {
 			// not mysql protocal.
@@ -77,6 +79,14 @@ func (s *MysqlStream) run() {
 				// not the packet concerned, skip ASAP
 				continue
 			}
+			if base.Seq != 0 {
+				glog.V(6).Infof("discard request packet, seq: %d, data: %v", base.Seq, base.Data)
+				continue
+			}
+		} else if base.Seq != 1 {
+			// only care about the first packet of response
+			glog.V(6).Infof("discard response packet, seq: %d, data: %v", base.Seq, base.Data)
+			continue
 		}
 
 		// Warning for possible blocking
@@ -127,7 +137,7 @@ func (b *bidi) easyBlocking() {
 		case <-ticker.C:
 			reqlen := len(b.req)
 			rsplen := len(b.rsp)
-			if reqlen > 100 || rsplen > 100 {
+			if reqlen > 1000 || rsplen > 1000 {
 				// flush half of the current data
 				glog.Warningf("flush blocking packet, data lost, request: %v, response: %v", reqlen, rsplen)
 				go func(length int) {
