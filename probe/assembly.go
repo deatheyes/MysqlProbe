@@ -63,9 +63,7 @@ func (s *MysqlStream) run() {
 		//base, err := ReadMysqlBasePacket(&s.r)
 		if err == io.EOF {
 			// We must read until we see an EOF... very important!
-			// currently disable, possible blocking
-			// TODO: slove it
-			//s.bidi.shutdown()
+			s.bidi.shutdown()
 			return
 		} else if err != nil {
 			// not mysql protocal.
@@ -77,16 +75,16 @@ func (s *MysqlStream) run() {
 		if s.client {
 			if base.Data[0] != comQuery && base.Data[0] != comStmtPrepare && base.Data[0] != comStmtExecute {
 				// not the packet concerned, skip ASAP
-				glog.V(7).Infof("discard request packet, seq: %d, data: %v", base.Seq, base.Data)
+				glog.V(7).Infof("[%v] discard request packet, seq: %d, data: %v", s.name, base.Seq, base.Data)
 				continue
 			}
 			if base.Seq != 0 {
-				glog.V(7).Infof("discard request packet, seq: %d, data: %v", base.Seq, base.Data)
+				glog.V(7).Infof("[%v] discard request packet, seq: %d, data: %v", s.name, base.Seq, base.Data)
 				continue
 			}
 		} else if base.Seq != 1 {
 			// only care about the first packet of response
-			glog.V(7).Infof("discard response packet, seq: %d, data: %v", base.Seq, base.Data)
+			glog.V(7).Infof("[%v] discard response packet, seq: %d, data: %v", s.name, base.Seq, base.Data)
 			continue
 		}
 
@@ -139,18 +137,18 @@ func (b *bidi) easyBlocking() {
 			reqlen := len(b.req)
 			rsplen := len(b.rsp)
 			if reqlen > 1000 || rsplen > 1000 {
-				// flush half of the current data
+				// flush the current data
 				glog.Warningf("flush blocking packet, data lost, request: %v, response: %v", reqlen, rsplen)
 				go func(length int) {
 					for i := 0; i < length; i++ {
 						<-b.req
 					}
-				}(reqlen / 2)
+				}(reqlen)
 				go func(length int) {
 					for i := 0; i < length; i++ {
 						<-b.rsp
 					}
-				}(rsplen / 2)
+				}(rsplen)
 			}
 		case <-b.stop:
 			return
@@ -329,18 +327,12 @@ func (f *BidiFactory) New(netFlow, tcpFlow gopacket.Flow) tcpassembly.Stream {
 		s = NewMysqlStream(bd, f.isRequest(netFlow, tcpFlow))
 		reverse := Key{netFlow.Reverse(), tcpFlow.Reverse()}
 		glog.Infof("[%s] created request side of bidirectional stream %s", f.wname, bd.key)
-		/*if v := f.bidiMap[reverse]; v != nil {
-			// shutdown the Orphan bidi.
-			v.shutdown()
-		}*/
 		// Register bidirectional with the reverse key, so the matching stream going
 		// the other direction will find it.
 		f.bidiMap[reverse] = bd
 	} else {
 		glog.Infof("[%v] found response side of bidirectional stream %v", f.wname, bd.key)
 		s = NewMysqlStream(bd, f.isRequest(netFlow, tcpFlow))
-		// Clear out the bidi we're using from the map, just in case.
-		delete(f.bidiMap, k)
 	}
 	return &s.r
 }
