@@ -49,8 +49,8 @@ func NewCollector(report chan<- []byte, reportPeriod time.Duration, disableConne
 		clients:           make(map[*Client]bool),
 		clientAddrs:       make(map[string]*Client),
 		report:            report,
-		reportIn:          make(chan *message.Report),
-		messageIn:         make(chan *message.Message),
+		reportIn:          make(chan *message.Report, 1000),
+		messageIn:         make(chan *message.Message, 1000),
 		register:          make(chan *Client),
 		unregister:        make(chan *Client),
 		registerAddr:      make(chan string),
@@ -221,6 +221,29 @@ func (c *Collector) ProcessData(data []byte) {
 	c.reportIn <- r
 }
 
+// merge collected reports, used by master and standby master
+func (c *Collector) assembleReport(target, slice *message.Report) {
+	glog.V(8).Info("[collector] merge report")
+	// merge report
+	target.Merge(slice)
+	// caculate qps
+	for k, group := range slice.Groups {
+		c.qps.Add(k, int64(group.SuccessCount+group.FailedCount))
+		c.latency.Add(k, int64(group.SuccCostMsTotal+group.FailedCostMsTotal))
+	}
+}
+
+// merge collected messages, used by slave
+func (c *Collector) assembleMessage(target *message.Report, slice *message.Message) {
+	glog.V(7).Infof("[collector] merge message: %v", slice.SQL)
+	// merge message
+	target.AddMessage(slice)
+	// caculate qps
+	c.qps.Add(slice.SQL, 1)
+	// caculate latency us
+	c.latency.Add(slice.SQL, slice.TimestampRsp.Sub(slice.TimestampReq).Nanoseconds()/1000)
+}
+
 // Run start the main assembling process on message and report level
 func (c *Collector) Run() {
 	glog.Info("collector start...")
@@ -239,22 +262,19 @@ func (c *Collector) Run() {
 				close(client.send)
 			}
 		case r := <-c.reportIn:
-			glog.V(7).Info("collector merge report")
-			// merge collected reports, used by master and standby master
-			report.Merge(r)
-			// caculate qps
-			for k, group := range r.Groups {
-				c.qps.Add(k, int64(group.SuccessCount+group.FailedCount))
-				c.latency.Add(k, int64(group.SuccCostMsTotal+group.FailedCostMsTotal))
+			c.assembleReport(report, r)
+			// try to receive more reports
+			for i := 0; i < len(c.reportIn); i++ {
+				r = <-c.reportIn
+				c.assembleReport(report, r)
 			}
 		case m := <-c.messageIn:
-			glog.V(7).Infof("[collector] merge message: %v", m.SQL)
-			// merge collected messages, used by slave
-			report.AddMessage(m)
-			// caculate qps
-			c.qps.Add(m.SQL, 1)
-			// caculate latency ms
-			c.latency.Add(m.SQL, m.TimestampRsp.Sub(m.TimestampReq).Nanoseconds()/1000000)
+			c.assembleMessage(report, m)
+			// try to receive more messages
+			for i := 0; i < len(c.messageIn); i++ {
+				m = <-c.messageIn
+				c.assembleMessage(report, m)
+			}
 		case <-ticker.C:
 			glog.V(7).Info("collector flush report")
 			// report and flush merged data

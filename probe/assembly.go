@@ -1,7 +1,6 @@
 package probe
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"sync"
@@ -57,17 +56,18 @@ func NewMysqlStream(bidi *bidi, client bool) *MysqlStream {
 }
 
 func (s *MysqlStream) run() {
-	buf := bufio.NewReader(&s.r)
+	//buf := bufio.NewReader(&s.r)
 	for {
-		base, err := ReadMysqlBasePacket(buf)
-		//base, err := ReadMysqlBasePacket(&s.r)
+		//base, err := ReadMysqlBasePacket(buf)
+		base, err := ReadMysqlBasePacket(&s.r)
 		if err == io.EOF {
 			// We must read until we see an EOF... very important!
 			s.bidi.shutdown()
 			return
 		} else if err != nil {
-			// not mysql protocal.
+			// packet error.
 			glog.Warningf("[%v] stream parse mysql packet failed: %v", s.name, err)
+			s.bidi.shutdown()
 			return
 		}
 
