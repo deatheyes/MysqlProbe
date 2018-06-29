@@ -33,11 +33,11 @@ type MysqlStream struct {
 	c      chan *MysqlBasePacket // output channel.
 	client bool                  // ture if it is a requeset stream.
 	name   string                // stream name for logging.
-	closed bool                  // if this stream closed
+	closed bool                  // if this stream closed.
 	count  int                   // current packet data length.
 	length int                   // packet body length.
-	header []byte                // packet header
-	body   []byte                // packet body
+	header []byte                // packet header.
+	body   []byte                // packet body.
 	seq    byte                  // packet seq.
 	status byte                  // parse status.
 }
