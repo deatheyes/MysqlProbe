@@ -229,7 +229,7 @@ func (c *Collector) assembleReport(target, slice *message.Report) {
 	// caculate qps
 	for k, group := range slice.Groups {
 		c.qps.Add(k, int64(group.SuccessCount+group.FailedCount))
-		c.latency.Add(k, int64(group.SuccCostMsTotal+group.FailedCostMsTotal))
+		c.latency.Add(k, int64(group.SuccCostUsTotal+group.FailedCostUsTotal))
 	}
 }
 

@@ -65,6 +65,13 @@ func NewMysqlStream(bidi *bidi, client bool) *MysqlStream {
 
 // Reassembled implements tcpassembly.Stream's Reassembled function.
 func (s *MysqlStream) Reassembled(reassembly []tcpassembly.Reassembly) {
+	// flush data
+	if s.bidi.flush {
+		s.count = 0
+		s.status = readHead
+		return
+	}
+
 	// parse as many packets as possible
 	var pos int
 	for _, r := range reassembly {
@@ -178,6 +185,7 @@ type bidi struct {
 	stopped        bool                    // if is stopped.
 	name           string                  // bidi name for logging.
 	factory        *BidiFactory            // owner.
+	flush          bool                    // if flush data.
 }
 
 func newbidi(key Key, out chan<- *message.Message, wname string, factory *BidiFactory) *bidi {
@@ -190,6 +198,7 @@ func newbidi(key Key, out chan<- *message.Message, wname string, factory *BidiFa
 		out:     out,
 		name:    fmt.Sprintf("%s-%s", wname, key),
 		factory: factory,
+		flush:   false,
 	}
 	go b.run()
 	go b.monitor()
@@ -211,16 +220,17 @@ func (b *bidi) monitor() {
 		if reqlen > 1000 || rsplen > 1000 {
 			// flush the current data
 			glog.Warningf("flush blocking packet, data lost, request: %v, response: %v", reqlen, rsplen)
-			go func(length int) {
-				for i := 0; i < length; i++ {
-					<-b.req
+			b.flush = true
+		flush:
+			for {
+				select {
+				case <-b.req:
+				case <-b.rsp:
+				default:
+					break flush
 				}
-			}(reqlen)
-			go func(length int) {
-				for i := 0; i < length; i++ {
-					<-b.rsp
-				}
-			}(rsplen)
+			}
+			b.flush = false
 		}
 	}
 }
