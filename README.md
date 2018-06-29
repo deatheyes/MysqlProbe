@@ -66,7 +66,7 @@ The configuration is a yaml file:
 Data collected from slave or master will be reported in form of json. The report contains statistical items:
 
 * sql template: A sql template is a sql like text without constant condition value. eg. "select * from user where name=?".
-* latency: The execution latency.
+* latency: The execution latency in microsecond.
 * timestamp: Request and response timestamps.
 * status: Wether sueecssed or not.
 
@@ -75,7 +75,7 @@ This is the current struct of the Report:
 	// MessageGroup is the assembled info of a sql template
 	type MessageGroup struct {
 		QPS               int64      `json:"qps"`                       // current qps
-		AverageLatency    int64      `json:"avg_latency"`               // average latency
+		AverageLatency    int64      `json:"avg_latency"`               // average latency in microsecond
 		SuccessCount      int        `json:"success"`                   // success query number
 		FailedCount       int        `json:"failed"`                    // failed query number
 		LastSeen          time.Time  `json:"last_seen"`                 // the latest timestamp
