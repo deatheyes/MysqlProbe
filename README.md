@@ -8,7 +8,7 @@ There is only one component which could run as three mode:
 * standby
 
 ### Slave
-Slave run at the same machine with mysql. A probe will be started to capture the mysql query infos, such as sql, error and execution overhead.
+Slave run at the same machine with mysql. A probe will be started to capture the mysql query infos, such as sql, error and execution latency.
 
 ### Master
 Master is responsible for collecting infos from slaves. Aggregated data will be reported by websocket.
@@ -17,7 +17,7 @@ Master is responsible for collecting infos from slaves. Aggregated data will be 
 Standby is a special master that runs as the backup of the master. It is only available in gossip cluster mode.
 
 ## Cluster
-There are two cluster modes, gossip and static. 
+There are two cluster modes, **gossip** and **static**. 
 
 ### Gossip Cluster
 In gossip mode, nodes are aware of each other, auto failover could be taken by the system.
@@ -66,7 +66,7 @@ The configuration is a yaml file:
 Data collected from slave or master will be reported in form of json. The report contains statistical items:
 
 * sql template: A sql template is a sql like text without constant condition value. eg. "select * from user where name=?".
-* overhead: The execution overhead.
+* latency: The execution latency.
 * timestamp: Request and response timestamps.
 * status: Wether sueecssed or not.
 
