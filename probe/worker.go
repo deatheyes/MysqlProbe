@@ -3,7 +3,6 @@ package probe
 import (
 	"encoding/binary"
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/golang/glog"
@@ -12,6 +11,7 @@ import (
 	"github.com/google/gopacket/tcpassembly"
 
 	"github.com/yanyu/MysqlProbe/message"
+	"github.com/yanyu/MysqlProbe/util"
 )
 
 // Worker assembles the data from tcp connection distributed by Probe
@@ -33,6 +33,7 @@ func NewProbeWorker(probe *Probe, out chan<- *message.Message, id int, interval 
 		out:          out,
 		interval:     interval,
 		logAllPacket: logAllPacket,
+		id:           id,
 		name:         fmt.Sprintf("%v-%v", probe.device, id),
 	}
 	go p.Run()
@@ -53,11 +54,11 @@ func (w *Worker) Run() {
 	assembler.MaxBufferedPagesTotal = 100000
 	assembler.MaxBufferedPagesPerConnection = 1000
 
-	// padding for broken symmetry.
-	padding := time.Millisecond * time.Duration(rand.Int()*w.id%500)
+	// padding for breaking symmetry.
+	padding := time.Millisecond * time.Duration((util.Hash(w.name)%20)*10)
 	ticker := time.Tick(w.interval + padding)
 	count := 0
-	glog.Infof("[worker %v] init done, ticker: %v", w.id, w.interval+padding)
+	glog.Infof("[%v] init done, ticker: %v", w.name, w.interval+padding)
 	for {
 		select {
 		case packet := <-w.in:

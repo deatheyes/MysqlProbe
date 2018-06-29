@@ -1,5 +1,9 @@
 package util
 
+import (
+	"hash/fnv"
+)
+
 // ReadLengthEncodedInteger is a length decoder
 func ReadLengthEncodedInteger(b []byte) (uint64, bool, int) {
 	// See issue #349
@@ -35,4 +39,11 @@ func ReadLengthEncodedInteger(b []byte) (uint64, bool, int) {
 // ReadStatus return the mysql reponse status
 func ReadStatus(b []byte) uint16 {
 	return uint16(b[0]) | uint16(b[1])<<8
+}
+
+// Hash return the hash code of a string
+func Hash(key string) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(key))
+	return h.Sum32()
 }
