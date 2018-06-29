@@ -3,7 +3,6 @@ package probe
 import (
 	"encoding/binary"
 	"errors"
-	"io"
 	"time"
 
 	"github.com/golang/glog"
@@ -14,14 +13,23 @@ import (
 
 // MysqlBasePacket is the complete packet with head and payload
 type MysqlBasePacket struct {
-	Len       []byte    // head: body length
-	Seq       byte      // head: sequence
+	Header    []byte    // header
 	Data      []byte    // body
 	Timestamp time.Time // timestamp this packet assembled
 }
 
+// Seq return the Sequence id
+func (p *MysqlBasePacket) Seq() byte {
+	return p.Header[3]
+}
+
+// Length retrun the body length
+func (p *MysqlBasePacket) Length() int {
+	return int(uint32(p.Header[0]) | uint32(p.Header[1])<<8 | uint32(p.Header[2])<<16)
+}
+
 // ReadMysqlBasePacket read and parse mysql base packet from a reader
-func ReadMysqlBasePacket(r *ReaderStream) (*MysqlBasePacket, error) {
+/*func ReadMysqlBasePacket(r *ReaderStream) (*MysqlBasePacket, error) {
 	var err error
 	head := make([]byte, 4)
 	if _, err = io.ReadFull(r, head); err != nil {
@@ -35,7 +43,7 @@ func ReadMysqlBasePacket(r *ReaderStream) (*MysqlBasePacket, error) {
 		return nil, err
 	}
 	return packet, nil
-}
+}*/
 
 // ReadMysqlBasePacket read and parse mysql base packet from a reader
 /*func ReadMysqlBasePacket(reader *bufio.Reader) (*MysqlBasePacket, error) {
@@ -166,8 +174,7 @@ func (p *MysqlBasePacket) DecodeFromBytes(data []byte) error {
 		return errNotEnouthData
 	}
 
-	p.Len = data[0:3]
-	p.Seq = data[3]
+	p.Header = data[0:4]
 	length := int(uint32(data[0]) | uint32(data[1])<<8 | uint32(data[2])<<16)
 
 	dataEnd := length + 4
@@ -192,16 +199,16 @@ func (p *MysqlBasePacket) ParseRequestPacket() (*MysqlRequestPacket, error) {
 			glog.V(8).Infof("possible not a request packet, prase statement failed: %v", err)
 			return nil, errParsedFailed
 		}
-		return &MysqlRequestPacket{seq: p.Seq, cmd: comQuery, sql: p.Data[1:], stmt: stmt}, nil
+		return &MysqlRequestPacket{seq: p.Seq(), cmd: comQuery, sql: p.Data[1:], stmt: stmt}, nil
 	case comStmtPrepare:
-		return &MysqlRequestPacket{seq: p.Seq, cmd: comStmtPrepare, sql: p.Data[1:]}, nil
+		return &MysqlRequestPacket{seq: p.Seq(), cmd: comStmtPrepare, sql: p.Data[1:]}, nil
 	case comStmtExecute:
 		// we only care about the statement id currently
 		if len(p.Data) < 5 {
 			return nil, errNotEnouthData
 		}
 		stmtID := uint32(p.Data[1]) | uint32(p.Data[2])<<8 | uint32(p.Data[3])<<16 | uint32(p.Data[4])<<24
-		return &MysqlRequestPacket{seq: p.Seq, cmd: comStmtExecute, stmtID: stmtID}, nil
+		return &MysqlRequestPacket{seq: p.Seq(), cmd: comStmtExecute, stmtID: stmtID}, nil
 	default:
 		return nil, errParsedFailed
 	}
@@ -238,7 +245,7 @@ func (p *MysqlBasePacket) parsePrepareOK() (*MysqlResponsePacket, error) {
 		return nil, errParsedFailed
 	}
 	status.stmtID = binary.LittleEndian.Uint32(p.Data[1:5])
-	return &MysqlResponsePacket{seq: p.Seq, status: status}, nil
+	return &MysqlResponsePacket{seq: p.Seq(), status: status}, nil
 }
 
 func (p *MysqlBasePacket) parseOK() (*MysqlResponsePacket, error) {
@@ -248,7 +255,7 @@ func (p *MysqlBasePacket) parseOK() (*MysqlResponsePacket, error) {
 	status.affectedRows, _, n = util.ReadLengthEncodedInteger(p.Data[1:])
 	status.insertID, _, m = util.ReadLengthEncodedInteger(p.Data[1+n:])
 	status.status = util.ReadStatus(p.Data[1+n+m : 1+n+m+2])
-	return &MysqlResponsePacket{seq: p.Seq, status: status}, nil
+	return &MysqlResponsePacket{seq: p.Seq(), status: status}, nil
 }
 
 func (p *MysqlBasePacket) parseErr() (*MysqlResponsePacket, error) {
@@ -261,11 +268,11 @@ func (p *MysqlBasePacket) parseErr() (*MysqlResponsePacket, error) {
 		pos = 9
 	}
 	status.message = string(p.Data[pos:])
-	return &MysqlResponsePacket{seq: p.Seq, status: status}, nil
+	return &MysqlResponsePacket{seq: p.Seq(), status: status}, nil
 }
 
 func (p *MysqlBasePacket) parseLocalInFile() (*MysqlResponsePacket, error) {
-	return &MysqlResponsePacket{seq: p.Seq, status: &MysqlResponseStatus{flag: p.Data[0]}}, nil
+	return &MysqlResponsePacket{seq: p.Seq(), status: &MysqlResponseStatus{flag: p.Data[0]}}, nil
 }
 
 func (p *MysqlBasePacket) parseResultSetHeader() (*MysqlResponsePacket, error) {
@@ -281,7 +288,7 @@ func (p *MysqlBasePacket) parseResultSetHeader() (*MysqlResponsePacket, error) {
 	// column count
 	_, _, n := util.ReadLengthEncodedInteger(p.Data)
 	if n-len(p.Data) == 0 {
-		return &MysqlResponsePacket{seq: p.Seq, status: &MysqlResponseStatus{flag: p.Data[0]}}, nil
+		return &MysqlResponsePacket{seq: p.Seq(), status: &MysqlResponseStatus{flag: p.Data[0]}}, nil
 	}
 	return nil, errParsedFailed
 }
