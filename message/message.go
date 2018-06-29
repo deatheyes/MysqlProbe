@@ -43,8 +43,8 @@ type MessageGroup struct {
 	SuccessCount      int       `json:"success"`                   // success query number
 	FailedCount       int       `json:"failed"`                    // failed query number
 	LastSeen          time.Time `json:"last_seen"`                 // the latest timestamp
-	SuccCostMsTotal   int64     `json:"success_total_cost"`        // total cost of success query, we don't caculate average info for the sake of performence
-	FailedCostMsTotal int64     `json:"failed_total_cost"`         // total cost of failed query, we don't caculate average info for the sake of performence
+	SuccCostUsTotal   int64     `json:"success_total_cost"`        // total cost of success query, we don't caculate average info for the sake of performence
+	FailedCostUsTotal int64     `json:"failed_total_cost"`         // total cost of failed query, we don't caculate average info for the sake of performence
 	NoGoodIndexUsed   int64     `json:"status_no_good_index_used"` // count of SERVER_STATUS_NO_GOOD_INDEX_USED
 	NoIndexUsed       int64     `json:"status_no_index_used"`      // count of SERVER_STATUS_NO_INDEX_USED
 	QueryWasSlow      int64     `json:"status_query_was_slow"`     // count of SERVER_QUERY_WAS_SLOW
@@ -67,8 +67,8 @@ func (g *MessageGroup) Merge(ag *MessageGroup) {
 		g.SuccessCount = ag.SuccessCount
 		g.FailedCount = ag.FailedCount
 		g.LastSeen = ag.LastSeen
-		g.SuccCostMsTotal = ag.SuccCostMsTotal
-		g.FailedCostMsTotal = ag.FailedCostMsTotal
+		g.SuccCostUsTotal = ag.SuccCostUsTotal
+		g.FailedCostUsTotal = ag.FailedCostUsTotal
 		g.NoIndexUsed = ag.NoIndexUsed
 		g.NoGoodIndexUsed = ag.NoGoodIndexUsed
 		g.QueryWasSlow = ag.QueryWasSlow
@@ -78,8 +78,8 @@ func (g *MessageGroup) Merge(ag *MessageGroup) {
 		if g.LastSeen.Before(ag.LastSeen) {
 			g.LastSeen = ag.LastSeen
 		}
-		g.SuccCostMsTotal += ag.SuccCostMsTotal
-		g.FailedCostMsTotal += ag.FailedCostMsTotal
+		g.SuccCostUsTotal += ag.SuccCostUsTotal
+		g.FailedCostUsTotal += ag.FailedCostUsTotal
 		g.NoIndexUsed += ag.NoIndexUsed
 		g.NoGoodIndexUsed += ag.NoGoodIndexUsed
 		g.QueryWasSlow += ag.QueryWasSlow
@@ -105,10 +105,10 @@ func (r *Report) AddMessage(m *Message) {
 		g = &MessageGroup{}
 		if m.Err {
 			g.FailedCount = 1
-			g.FailedCostMsTotal = cost
+			g.FailedCostUsTotal = cost
 		} else {
 			g.SuccessCount = 1
-			g.SuccCostMsTotal = cost
+			g.SuccCostUsTotal = cost
 		}
 
 		g.LastSeen = m.TimestampReq
@@ -116,10 +116,10 @@ func (r *Report) AddMessage(m *Message) {
 		r.Groups[m.SQL] = g
 	} else {
 		if m.Err {
-			g.FailedCostMsTotal = cost
+			g.FailedCostUsTotal = cost
 			g.FailedCount++
 		} else {
-			g.SuccCostMsTotal += cost
+			g.SuccCostUsTotal += cost
 			g.SuccessCount++
 		}
 

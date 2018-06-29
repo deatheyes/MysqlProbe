@@ -79,8 +79,8 @@ This is the current struct of the Report:
 		SuccessCount      int        `json:"success"`                   // success query number
 		FailedCount       int        `json:"failed"`                    // failed query number
 		LastSeen          time.Time  `json:"last_seen"`                 // the latest timestamp
-		SuccCostMsTotal   int64      `json:"success_total_cost"`        // total cost of success query, we don't caculate average info for the sake of performence
-		FailedCostMsTotal int64      `json:"failed_total_cost"`         // total cost of failed query, we don't caculate average info for the sake of performence
+		SuccCostUsTotal   int64      `json:"success_total_cost"`        // total cost of success query, we don't caculate average info for the sake of performence
+		FailedCostUsTotal int64      `json:"failed_total_cost"`         // total cost of failed query, we don't caculate average info for the sake of performence
 		NoGoodIndexUsed   int64      `json:"status_no_good_index_used"` // count of SERVER_STATUS_NO_GOOD_INDEX_USED
 		NoIndexUsed       int64      `json:"status_no_index_used"`      // count of SERVER_STATUS_NO_INDEX_USED
 		QueryWasSlow      int64      `json:"status_query_was_slow"`     // count of SERVER_QUERY_WAS_SLOW
