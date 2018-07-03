@@ -8,6 +8,9 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
+
+	"github.com/bcicen/grmon/agent"
+
 	"github.com/yanyu/MysqlProbe/config"
 	"github.com/yanyu/MysqlProbe/probe"
 	"github.com/yanyu/MysqlProbe/server"
@@ -36,6 +39,7 @@ func main() {
 var (
 	configfile string
 	version    bool
+	debug      bool
 )
 
 func showVersion() {
@@ -46,6 +50,7 @@ func showVersion() {
 func init() {
 	flag.StringVar(&configfile, "c", "./conf/config.yaml", "yaml `config` file path")
 	flag.BoolVar(&version, "version", false, "show version")
+	flag.BoolVar(&debug, "d", false, "enable grmon debug")
 }
 
 func main() {
@@ -53,6 +58,10 @@ func main() {
 
 	if version {
 		showVersion()
+	}
+
+	if debug {
+		grmon.Start()
 	}
 
 	conf, err := config.ConfigFromFile(configfile)

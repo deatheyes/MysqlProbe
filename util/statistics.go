@@ -13,7 +13,7 @@ type bucket struct {
 func newBucket(startTime time.Time) *bucket {
 	return &bucket{
 		startTime: startTime,
-		counters: make(map[string]int64),
+		counters:  make(map[string]int64),
 	}
 }
 
