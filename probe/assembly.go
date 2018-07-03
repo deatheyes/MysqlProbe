@@ -29,31 +29,27 @@ const (
 
 // MysqlStream is a tcp assembly stream wrapper of ReaderStream
 type MysqlStream struct {
-	bidi     *bidi                 // maps to the bidirectional twin.
-	c        chan *MysqlBasePacket // output channel.
-	flush    chan bool             // flush notify.
-	flushing bool                  // flush flag.
-	client   bool                  // ture if it is a requeset stream.
-	name     string                // stream name for logging.
-	closed   bool                  // if this stream closed.
-	count    int                   // current packet data length.
-	length   int                   // packet body length.
-	header   []byte                // packet header.
-	body     []byte                // packet body.
-	seq      byte                  // packet seq.
-	status   byte                  // parse status.
+	bidi   *bidi                 // maps to the bidirectional twin.
+	c      chan *MysqlBasePacket // output channel.
+	client bool                  // ture if it is a requeset stream.
+	name   string                // stream name for logging.
+	closed bool                  // if this stream closed.
+	count  int                   // current packet data length.
+	length int                   // packet body length.
+	header []byte                // packet header.
+	body   []byte                // packet body.
+	seq    byte                  // packet seq.
+	status byte                  // parse status.
 }
 
 // NewMysqlStream create a bi-directional tcp assembly stream
 func NewMysqlStream(bidi *bidi, client bool) *MysqlStream {
 	s := &MysqlStream{
-		bidi:     bidi,
-		client:   client,
-		closed:   false,
-		count:    0,
-		status:   readHead,
-		flush:    make(chan bool),
-		flushing: false,
+		bidi:   bidi,
+		client: client,
+		closed: false,
+		count:  0,
+		status: readHead,
 	}
 	if client {
 		s.c = bidi.req
@@ -69,14 +65,8 @@ func NewMysqlStream(bidi *bidi, client bool) *MysqlStream {
 
 // Reassembled implements tcpassembly.Stream's Reassembled function.
 func (s *MysqlStream) Reassembled(reassembly []tcpassembly.Reassembly) {
-	select {
-	case s.flushing = <-s.flush:
-	default:
-		break
-	}
-
 	// flush data
-	if s.flushing {
+	if s.bidi.flush {
 		s.count = 0
 		s.status = readHead
 		return
@@ -235,8 +225,7 @@ func (b *bidi) monitor() {
 			// flush the current data
 			glog.Warningf("flush blocking packet, data lost, request: %v, response: %v", reqlen, rsplen)
 			// stop receiving packets
-			b.a.flush <- true
-			b.b.flush <- true
+			b.flush = true
 			// disable parsing and reset status
 			b.disable <- true
 			// flush channel
@@ -249,8 +238,7 @@ func (b *bidi) monitor() {
 			// enable parsing
 			b.enable <- true
 			// start receiving packets
-			b.a.flush <- false
-			b.b.flush <- false
+			b.flush = false
 			glog.Warningf("flush done, request: %v, response: %v", len(b.req), len(b.rsp))
 		}
 	}
