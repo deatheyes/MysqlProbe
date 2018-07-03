@@ -103,6 +103,7 @@ func (p *Probe) Run() {
 		glog.Fatalf("set bpf filter failed: %v", err)
 		return
 	}
+	defer handle.Close()
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for packet := range packetSource.Packets() {
