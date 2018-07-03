@@ -185,7 +185,9 @@ type bidi struct {
 	stopped        bool                    // if is stopped.
 	name           string                  // bidi name for logging.
 	factory        *BidiFactory            // owner.
-	flush          bool                    // if flush data.
+	flush          bool                    // flushing flag.
+	disable        chan bool               // disable processing.
+	enable         chan bool               // enable processing.
 }
 
 func newbidi(key Key, out chan<- *message.Message, wname string, factory *BidiFactory) *bidi {
@@ -199,6 +201,8 @@ func newbidi(key Key, out chan<- *message.Message, wname string, factory *BidiFa
 		name:    fmt.Sprintf("%s-%s", wname, key),
 		factory: factory,
 		flush:   false,
+		disable: make(chan bool),
+		enable:  make(chan bool),
 	}
 	go b.run()
 	go b.monitor()
@@ -220,17 +224,22 @@ func (b *bidi) monitor() {
 		if reqlen > 1000 || rsplen > 1000 {
 			// flush the current data
 			glog.Warningf("flush blocking packet, data lost, request: %v, response: %v", reqlen, rsplen)
+			// stop receiving packets
 			b.flush = true
-		flush:
-			for {
-				select {
-				case <-b.req:
-				case <-b.rsp:
-				default:
-					break flush
-				}
+			// disable parsing and reset status
+			b.disable <- true
+			// flush channel
+			for i := 0; i < len(b.req); i++ {
+				<-b.req
 			}
+			for i := 0; i < len(b.rsp); i++ {
+				<-b.rsp
+			}
+			// enable parsing
+			b.enable <- true
+			// start receiving packets
 			b.flush = false
+			glog.Warningf("flush done, request: %v, response: %v", reqlen, rsplen)
 		}
 	}
 }
@@ -255,6 +264,10 @@ func (b *bidi) run() {
 	for {
 		// get request packet
 		select {
+		case <-b.disable:
+			// wait for enable, then reset
+			<-b.enable
+			continue
 		case reqPacket = <-b.req:
 		case <-b.stop:
 			return
@@ -302,6 +315,10 @@ func (b *bidi) run() {
 		// find response
 		for {
 			select {
+			case <-b.disable:
+				// wait for enable, then reset
+				<-b.enable
+				break
 			case rspPacket = <-b.rsp:
 			case <-b.stop:
 				return
