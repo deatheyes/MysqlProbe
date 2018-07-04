@@ -8,22 +8,25 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// Config holds the parameters starting  probe, server and cluster
 type Config struct {
 	Slave    bool    `yaml:"slave"`      // run as slave in the cluster
 	Port     uint16  `yaml:"serverport"` // server port
 	Interval uint16  `yaml:"interval"`   // report interval
 	Cluster  Cluster `yaml:"cluster"`    // cluster config
 	Probe    Probe   `yaml:"probe"`      // probe conifg, only slave will start a probe
-	Role     string  `yaml:-`            // role of this node
-	Path     string  `yaml:-`            // config file path
+	Role     string  `yaml:"-"`          // role of this node
+	Path     string  `yaml:"-"`          // config file path
 }
 
+// Cluster specify the arguments to run cluster
 type Cluster struct {
 	Gossip bool   `yaml:"gossip"` // if run as gossip cluster mode
 	Group  string `yaml:"group"`  // cluster name
-	Port   uint16 `yaml:'port'`   // gossip bind port, random if not set
+	Port   uint16 `yaml:"port"`   // gossip bind port, random if not set
 }
 
+// Probe specify the arguments to initialize pcap
 type Probe struct {
 	Device  string `yaml:"device"`       // local devices probe monitor, splited by ','
 	Port    uint16 `yaml:"port"`         // port for bpf filter
@@ -31,7 +34,8 @@ type Probe struct {
 	Workers int    `yaml:"workers"`      // worker number
 }
 
-func ConfigFromFile(file string) (*Config, error) {
+// ReadFile load config from file
+func ReadFile(file string) (*Config, error) {
 	data, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, err
@@ -43,11 +47,13 @@ func ConfigFromFile(file string) (*Config, error) {
 	return c, nil
 }
 
-func ConfigToBytes(config *Config) []byte {
+// ToBytes marshal the config
+func ToBytes(config *Config) []byte {
 	data, _ := yaml.Marshal(config)
 	return data
 }
 
+// Seeds holds the basic cluster infomation
 type Seeds struct {
 	Epic  uint64   `yaml:"epic"`
 	Name  string   `yaml:"name"`
@@ -55,6 +61,7 @@ type Seeds struct {
 	Role  string   `yaml:"role"`
 }
 
+// SeedsFromFile read seed from file
 func SeedsFromFile(file string) (*Seeds, error) {
 	data, err := ioutil.ReadFile(file)
 	if err != nil {
@@ -67,11 +74,13 @@ func SeedsFromFile(file string) (*Seeds, error) {
 	return s, nil
 }
 
+// SeedsToBytes marshal the seeds
 func SeedsToBytes(s *Seeds) []byte {
 	data, _ := yaml.Marshal(s)
 	return data
 }
 
+// SeedsToFile write the seeds to file
 func SeedsToFile(seeds *Seeds, file string) error {
 	dir := path.Dir(file)
 	tmpfile, err := ioutil.TempFile(dir, "seeds")

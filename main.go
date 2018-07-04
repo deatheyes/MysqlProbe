@@ -58,13 +58,13 @@ func main() {
 		showVersion()
 	}
 
-	conf, err := config.ConfigFromFile(configfile)
+	conf, err := config.ReadFile(configfile)
 	if err != nil {
 		glog.Fatalf("load config failed: %v", err)
 		return
 	}
 
-	glog.Infof("load config done: %s", string(config.ConfigToBytes(conf)))
+	glog.Infof("load config done: %s", string(config.ToBytes(conf)))
 	conf.Path = configfile
 	// set default report interval if necessary
 	if conf.Interval == 0 {
