@@ -146,7 +146,7 @@ func (s *MysqlStream) Reassembled(reassembly []tcpassembly.Reassembly) {
 
 				need := s.length + 4 - s.count
 				left := len(r.Bytes) - pos
-				if need < left {
+				if need <= left {
 					pos += need
 					// skip the packet body done
 					s.count = 0
