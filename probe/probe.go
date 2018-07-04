@@ -11,6 +11,7 @@ package probe
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -55,7 +56,12 @@ func (p *Probe) Init() error {
 		return err
 	}
 	p.localIPs = IPs
-	p.filter = fmt.Sprintf("tcp and port %v", p.port)
+	slice := []string{}
+	for _, h := range p.localIPs {
+		item := fmt.Sprintf("(src host %v and src port %v) or (dst host %v and port %v)", h, p.port, h, p.port)
+		slice = append(slice, item)
+	}
+	p.filter = fmt.Sprintf("tcp and (%v)", strings.Join(slice, " or "))
 	if p.workerNum <= 0 {
 		p.workerNum = 1
 	}

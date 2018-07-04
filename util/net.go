@@ -14,10 +14,13 @@ func GetLocalIPs() ([]string, error) {
 	var ret []string
 	for _, addr := range addrs {
 		ipnet, ok := addr.(*net.IPNet)
-		if !ok {
+		if !ok || ipnet.IP.IsLoopback() {
 			continue
 		}
-		ret = append(ret, ipnet.IP.String())
+
+		if ipnet.IP.To4() != nil {
+			ret = append(ret, ipnet.IP.String())
+		}
 	}
 	return ret, nil
 }
