@@ -229,11 +229,11 @@ func (b *bidi) monitor() {
 			// disable parsing and reset status
 			b.disable <- true
 			// flush channel
-			for i := 0; i < len(b.req); i++ {
-				<-b.req
-			}
 			for i := 0; i < len(b.rsp); i++ {
 				<-b.rsp
+			}
+			for i := 0; i < len(b.req); i++ {
+				<-b.req
 			}
 			// enable parsing
 			b.enable <- true
