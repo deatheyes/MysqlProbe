@@ -21,6 +21,12 @@ func (k Key) String() string {
 	return fmt.Sprintf("%v:%v", k.net, k.transport)
 }
 
+// FlushContext specify which stream to enable or disable flushing
+type FlushContext struct {
+	key  Key  // stream key to flush
+	flag bool // enable or disable
+}
+
 const (
 	readHead byte = iota
 	readBody
@@ -63,15 +69,14 @@ func NewMysqlStream(bidi *bidi, client bool) *MysqlStream {
 	return s
 }
 
+// ResetParseStatus rewinds the parse status
+func (s *MysqlStream) ResetParseStatus() {
+	s.count = 0
+	s.status = readHead
+}
+
 // Reassembled implements tcpassembly.Stream's Reassembled function.
 func (s *MysqlStream) Reassembled(reassembly []tcpassembly.Reassembly) {
-	// flush data
-	if s.bidi.flush {
-		s.count = 0
-		s.status = readHead
-		return
-	}
-
 	// parse as many packets as possible
 	var pos int
 	for _, r := range reassembly {
@@ -185,12 +190,12 @@ type bidi struct {
 	stopped        bool                    // if is stopped.
 	name           string                  // bidi name for logging.
 	factory        *BidiFactory            // owner.
-	flush          bool                    // flushing flag.
+	flush          chan<- *FlushContext    // flush control.
 	disable        chan bool               // disable processing.
 	enable         chan bool               // enable processing.
 }
 
-func newbidi(key Key, out chan<- *message.Message, wname string, factory *BidiFactory) *bidi {
+func newbidi(key Key, out chan<- *message.Message, flush chan<- *FlushContext, wname string, factory *BidiFactory) *bidi {
 	b := &bidi{
 		key:     key,
 		req:     make(chan *MysqlBasePacket, 10000),
@@ -200,13 +205,22 @@ func newbidi(key Key, out chan<- *message.Message, wname string, factory *BidiFa
 		out:     out,
 		name:    fmt.Sprintf("%s-%s", wname, key),
 		factory: factory,
-		flush:   false,
+		flush:   flush,
 		disable: make(chan bool),
 		enable:  make(chan bool),
 	}
 	go b.run()
 	go b.monitor()
 	return b
+}
+
+func (b *bidi) resetParseStatus() {
+	if b.a != nil {
+		b.a.ResetParseStatus()
+	}
+	if b.b != nil {
+		b.b.ResetParseStatus()
+	}
 }
 
 func (b *bidi) monitor() {
@@ -225,7 +239,7 @@ func (b *bidi) monitor() {
 			// flush the current data
 			glog.Warningf("flush blocking packet, data lost, request: %v, response: %v", reqlen, rsplen)
 			// stop receiving packets
-			b.flush = true
+			b.flush <- &FlushContext{key: b.key, flag: true}
 			// disable parsing and reset status
 			b.disable <- true
 			// flush channel
@@ -250,8 +264,10 @@ func (b *bidi) monitor() {
 			}
 			// enable parsing
 			b.enable <- true
+			// reset parse status
+			b.resetParseStatus()
 			// start receiving packets
-			b.flush = false
+			b.flush <- &FlushContext{key: b.key, flag: false}
 			glog.Warningf("flush done, request: %v, response: %v", len(b.req), len(b.rsp))
 		}
 	}
@@ -403,6 +419,7 @@ type BidiFactory struct {
 	out       chan<- *message.Message // channle to report message.
 	isRequest IsRequest               // check if it is a request stream.
 	wname     string                  // worker name for log.
+	flush     chan<- *FlushContext    // flush control.
 	sync.RWMutex
 }
 
@@ -418,7 +435,7 @@ func (f *BidiFactory) New(netFlow, tcpFlow gopacket.Flow) tcpassembly.Stream {
 	k := Key{netFlow, tcpFlow}
 	bd := f.bidiMap[k]
 	if bd == nil {
-		bd = newbidi(k, f.out, f.wname, f)
+		bd = newbidi(k, f.out, f.flush, f.wname, f)
 		s = NewMysqlStream(bd, f.isRequest(netFlow, tcpFlow))
 		reverse := Key{netFlow.Reverse(), tcpFlow.Reverse()}
 		glog.Infof("[%s] created request side of bidirectional stream %s", f.wname, bd.key)
