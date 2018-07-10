@@ -229,11 +229,24 @@ func (b *bidi) monitor() {
 			// disable parsing and reset status
 			b.disable <- true
 			// flush channel
-			for i := 0; i < len(b.rsp); i++ {
-				<-b.rsp
-			}
-			for i := 0; i < len(b.req); i++ {
-				<-b.req
+			// it is not a proper way to flush channel with banning, but is simple.
+			t := time.NewTicker(time.Second)
+			flag := false
+		flush:
+			for {
+				select {
+				case <-b.req:
+					flag = true
+				case <-b.rsp:
+					flag = true
+				case <-t.C:
+					if flag {
+						flag = false
+					} else {
+						t.Stop()
+						break flush
+					}
+				}
 			}
 			// enable parsing
 			b.enable <- true
