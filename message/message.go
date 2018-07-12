@@ -2,6 +2,7 @@ package message
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -25,6 +26,7 @@ const (
 
 // Message is the info of a sql query
 type Message struct {
+	IP           string    `json:"ip"`            // server ip.
 	SQL          string    `json:"sql"`           // templated sql.
 	Err          bool      `json:"error"`         // sql process error.
 	ErrMsg       string    `json:"error_message"` // sql process error message.
@@ -99,7 +101,8 @@ func NewReport() *Report {
 
 // AddMessage asseble a Message to this Report
 func (r *Report) AddMessage(m *Message) {
-	g := r.Groups[m.SQL]
+	key := fmt.Sprintf("%v | %v", m.SQL, m.IP)
+	g := r.Groups[key]
 	cost := m.TimestampRsp.Sub(m.TimestampReq).Nanoseconds() / 1000000
 	if g == nil {
 		g = &MessageGroup{}
@@ -113,7 +116,7 @@ func (r *Report) AddMessage(m *Message) {
 
 		g.LastSeen = m.TimestampReq
 		//g.Messages = append(g.Messages, m)
-		r.Groups[m.SQL] = g
+		r.Groups[key] = g
 	} else {
 		if m.Err {
 			g.FailedCostUsTotal = cost

@@ -196,7 +196,7 @@ func (p *MysqlBasePacket) ParseRequestPacket() (*MysqlRequestPacket, error) {
 	case comQuery:
 		stmt, err := sqlparser.Parse(string(p.Data[1:]))
 		if err != nil || stmt == nil {
-			glog.V(8).Infof("possible not a request packet, prase statement failed: %v", err)
+			glog.V(6).Infof("possible not a request packet, prase statement failed: %v", err)
 			return nil, errParsedFailed
 		}
 		return &MysqlRequestPacket{seq: p.Seq(), cmd: comQuery, sql: p.Data[1:], stmt: stmt}, nil

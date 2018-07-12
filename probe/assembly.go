@@ -193,6 +193,7 @@ type bidi struct {
 	flush          chan<- *FlushContext    // flush control.
 	disable        chan bool               // disable processing.
 	enable         chan bool               // enable processing.
+	serverIP       string                  // server IP is a part of message.
 }
 
 func newbidi(key Key, out chan<- *message.Message, flush chan<- *FlushContext, wname string, factory *BidiFactory) *bidi {
@@ -314,7 +315,7 @@ func (b *bidi) run() {
 		}
 
 		// build message
-		msg = &message.Message{TimestampReq: reqPacket.Timestamp}
+		msg = &message.Message{TimestampReq: reqPacket.Timestamp, IP: b.serverIP}
 		switch packet.CMD() {
 		case comQuery:
 			// this is a raw sql query
@@ -436,7 +437,14 @@ func (f *BidiFactory) New(netFlow, tcpFlow gopacket.Flow) tcpassembly.Stream {
 	bd := f.bidiMap[k]
 	if bd == nil {
 		bd = newbidi(k, f.out, f.flush, f.wname, f)
-		s = NewMysqlStream(bd, f.isRequest(netFlow, tcpFlow))
+		isRequest := f.isRequest(netFlow, tcpFlow)
+		// set server ip
+		if isRequest {
+			bd.serverIP = netFlow.Dst().String()
+		} else {
+			bd.serverIP = netFlow.Src().String()
+		}
+		s = NewMysqlStream(bd, isRequest)
 		reverse := Key{netFlow.Reverse(), tcpFlow.Reverse()}
 		glog.Infof("[%s] created request side of bidirectional stream %s", f.wname, bd.key)
 		// Register bidirectional with the reverse key, so the matching stream going
