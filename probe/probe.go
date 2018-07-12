@@ -19,8 +19,8 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 
-	"github.com/yanyu/MysqlProbe/message"
-	"github.com/yanyu/MysqlProbe/util"
+	"github.com/deatheyes/MysqlProbe/message"
+	"github.com/deatheyes/MysqlProbe/util"
 )
 
 // Probe need to deloyed at server side.

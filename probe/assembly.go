@@ -9,7 +9,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/tcpassembly"
 
-	"github.com/yanyu/MysqlProbe/message"
+	"github.com/deatheyes/MysqlProbe/message"
 )
 
 // Key is the pair of networker and transport Flow

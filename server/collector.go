@@ -8,8 +8,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 
-	"github.com/yanyu/MysqlProbe/message"
-	"github.com/yanyu/MysqlProbe/util"
+	"github.com/deatheyes/MysqlProbe/message"
+	"github.com/deatheyes/MysqlProbe/util"
 )
 
 const (

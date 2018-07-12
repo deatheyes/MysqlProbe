@@ -7,7 +7,7 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/yanyu/MysqlProbe/config"
+	"github.com/deatheyes/MysqlProbe/config"
 )
 
 // Server manage all network input and output

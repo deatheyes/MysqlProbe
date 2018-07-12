@@ -8,7 +8,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/xwb1989/sqlparser"
 
-	"github.com/yanyu/MysqlProbe/util"
+	"github.com/deatheyes/MysqlProbe/util"
 )
 
 // MysqlBasePacket is the complete packet with head and payload

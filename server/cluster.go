@@ -18,7 +18,7 @@ import (
 	"github.com/hashicorp/memberlist"
 	"github.com/pborman/uuid"
 
-	localConfig "github.com/yanyu/MysqlProbe/config"
+	localConfig "github.com/deatheyes/MysqlProbe/config"
 )
 
 // lables of role

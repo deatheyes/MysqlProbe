@@ -10,8 +10,8 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/tcpassembly"
 
-	"github.com/yanyu/MysqlProbe/message"
-	"github.com/yanyu/MysqlProbe/util"
+	"github.com/deatheyes/MysqlProbe/message"
+	"github.com/deatheyes/MysqlProbe/util"
 )
 
 // Worker assembles the data from tcp connection distributed by Probe
