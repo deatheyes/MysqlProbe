@@ -37,6 +37,11 @@ type Message struct {
 	TimestampRsp time.Time `json:"rsponse_time"`  // timestamp for response package.
 }
 
+// HashKey return a string
+func (m *Message) HashKey() string {
+	return fmt.Sprintf("%v | %v", m.SQL, m.IP)
+}
+
 // MessageGroup is the assembled info of a sql template
 type MessageGroup struct {
 	// summary
@@ -101,7 +106,7 @@ func NewReport() *Report {
 
 // AddMessage asseble a Message to this Report
 func (r *Report) AddMessage(m *Message) {
-	key := fmt.Sprintf("%v | %v", m.SQL, m.IP)
+	key := m.HashKey()
 	g := r.Groups[key]
 	cost := m.TimestampRsp.Sub(m.TimestampReq).Nanoseconds() / 1000000
 	if g == nil {

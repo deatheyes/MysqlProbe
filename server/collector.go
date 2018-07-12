@@ -239,9 +239,10 @@ func (c *Collector) assembleMessage(target *message.Report, slice *message.Messa
 	// merge message
 	target.AddMessage(slice)
 	// caculate qps
-	c.qps.Add(slice.SQL, 1)
+	key := slice.HashKey()
+	c.qps.Add(key, 1)
 	// caculate latency us
-	c.latency.Add(slice.SQL, slice.TimestampRsp.Sub(slice.TimestampReq).Nanoseconds()/1000)
+	c.latency.Add(key, slice.TimestampRsp.Sub(slice.TimestampReq).Nanoseconds()/1000)
 }
 
 // Run start the main assembling process on message and report level
