@@ -86,7 +86,7 @@ func (s *MysqlStream) run() {
 				// which should only be the first part of tcp payload
 				basePacket := &MysqlBasePacket{}
 				if _, err = basePacket.DecodeFromBytes(tcp.Payload); err != nil {
-					glog.Warningf("[%v] parse request base packet failed: %v", s.name, err)
+					glog.V(6).Infof("[%v] parse request base packet failed: %v", s.name, err)
 					continue
 				}
 
@@ -124,6 +124,7 @@ func (s *MysqlStream) run() {
 				default:
 					// not the packet concerned, continue
 					glog.V(8).Infof("[%v] request packet received unconcerned packet", s.name)
+					reqPacket = nil
 					continue
 				}
 			} else {
@@ -138,7 +139,7 @@ func (s *MysqlStream) run() {
 				// which should only be the first part of tcp payload
 				basePacket := &MysqlBasePacket{}
 				if _, err = basePacket.DecodeFromBytes(tcp.Payload); err != nil {
-					glog.Warningf("[%v] parse response base packet failed: %v", s.name, err)
+					glog.V(6).Infof("[%v] parse response base packet failed: %v", s.name, err)
 					continue
 				}
 
@@ -184,6 +185,8 @@ func (s *MysqlStream) run() {
 					glog.V(6).Infof("[%v] mysql query parsed done: %v", s.name, msg.SQL)
 					s.assembly.out <- msg
 				}
+				reqPacket = nil
+				rspPacket = nil
 			}
 		case <-s.stop:
 			glog.Infof("[%v] close stream", s.name)
