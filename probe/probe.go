@@ -96,7 +96,7 @@ func (p *Probe) Run() {
 
 	glog.Infof("probe run - %s", p)
 	for id := 0; id < p.workerNum; id++ {
-		p.workers = append(p.workers, NewProbeWorker(p, p.out, id, time.Second, false))
+		p.workers = append(p.workers, NewProbeWorker(p, p.out, id, 5*time.Second, false))
 	}
 
 	// run probe.

@@ -9,7 +9,6 @@ import (
 	"github.com/google/gopacket"
 
 	"github.com/deatheyes/MysqlProbe/message"
-	"github.com/deatheyes/MysqlProbe/util"
 )
 
 // Worker assembles the data from tcp connection distributed by Probe
@@ -58,23 +57,17 @@ func (w *Worker) Run() {
 		flush:     w.flush,
 	}
 
-	// padding for breaking symmetry.
-	padding := time.Millisecond * time.Duration((util.Hash(w.name)%20)*10)
-	ticker := time.Tick(w.interval + padding)
-	count := 0
-	glog.Infof("[%v] init done, ticker: %v", w.name, w.interval+padding)
+	ticker := time.Tick(w.interval)
+	glog.Infof("[%v] init done, stream expiration: %v", w.name, w.interval)
 
 	for {
 		select {
 		case packet := <-w.in:
 			assembly.Assemble(packet)
 		case <-ticker:
-			count++
-			if count%10 == 0 {
-				// close expired stream
-				glog.V(8).Infof("[%v] try to close expired stream", w.name)
-				assembly.CloseOlderThan(time.Now().Add(-w.interval))
-			}
+			// close expired stream
+			glog.V(8).Infof("[%v] try to close expired stream", w.name)
+			assembly.CloseOlderThan(time.Now().Add(-w.interval))
 		}
 	}
 
