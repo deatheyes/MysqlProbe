@@ -29,7 +29,8 @@ func (p *MysqlBasePacket) DecodeFromBytes(data []byte) (int, error) {
 	length := int(uint32(data[0]) | uint32(data[1])<<8 | uint32(data[2])<<16)
 
 	if length+4 > len(data) {
-		glog.Warningf("unexpected data length: %v, required: %v, data: %s", len(data), length+4, data)
+		// this packet may not be the first packet of the request or response
+		glog.V(8).Infof("unexpected data length: %v, required: %v, data: %s", len(data), length+4, data)
 		return 0, errNotEnouthData
 	}
 	p.Data = data[4 : length+4]
