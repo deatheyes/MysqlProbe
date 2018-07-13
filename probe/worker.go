@@ -7,8 +7,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/tcpassembly"
 
 	"github.com/deatheyes/MysqlProbe/message"
 	"github.com/deatheyes/MysqlProbe/util"
@@ -52,61 +50,32 @@ func (w *Worker) Run() {
 		return w.owner.IsRequest(ip.String(), binary.BigEndian.Uint16(port.Raw()))
 	}
 
-	streamFactory := &BidiFactory{bidiMap: make(map[Key]*bidi), out: w.out, isRequest: f, wname: w.name, flush: w.flush}
-	streamPool := tcpassembly.NewStreamPool(streamFactory)
-	assembler := tcpassembly.NewAssembler(streamPool)
-	assembler.MaxBufferedPagesTotal = 100000
-	assembler.MaxBufferedPagesPerConnection = 1000
+	assembly := &Assembly{
+		streamMap: make(map[Key]*MysqlStream),
+		out:       w.out,
+		isRequest: f,
+		wname:     w.name,
+		flush:     w.flush,
+	}
 
 	// padding for breaking symmetry.
 	padding := time.Millisecond * time.Duration((util.Hash(w.name)%20)*10)
 	ticker := time.Tick(w.interval + padding)
 	count := 0
 	glog.Infof("[%v] init done, ticker: %v", w.name, w.interval+padding)
+
 	for {
 		select {
 		case packet := <-w.in:
-			if w.logAllPacket {
-				glog.V(8).Infof("[%v] parse packet: %v", w.name, packet)
-			}
-			if len(w.flushMap) != 0 {
-				// filter flushing
-				key := Key{packet.NetworkLayer().NetworkFlow(), packet.TransportLayer().TransportFlow()}
-				if ok := w.flushMap[key]; ok {
-					glog.V(8).Info("[%v] stream is flushing", w.name)
-					continue
-				}
-			}
-			tcp := packet.TransportLayer().(*layers.TCP)
-			assembler.AssembleWithTimestamp(packet.NetworkLayer().NetworkFlow(), tcp, packet.Metadata().Timestamp)
-		case ctx := <-w.flush:
-			reverse := Key{ctx.key.net.Reverse(), ctx.key.transport.Reverse()}
-			if ctx.flag {
-				// set flag and flush all buffered packet for alignment.
-				// we cannot close connection and rebuild the stream:
-				// 1. prepare cache will be lost.
-				// 2. those bidis don't need flush will be suffered.
-				glog.Warningf("[%v] stream %v is require flushing", w.name, ctx.key)
-				w.flushMap[ctx.key] = true
-				w.flushMap[reverse] = true
-				assembler.FlushWithOptions(tcpassembly.FlushOptions{CloseAll: false, T: time.Now()})
-			} else {
-				// clean flush flag
-				delete(w.flushMap, ctx.key)
-				delete(w.flushMap, reverse)
-			}
+			assembly.Assemble(packet)
 		case <-ticker:
-			// flush data every interval for process, not close connection.
-			// flush data every 10 * interval for clean up, close expired connection.
 			count++
 			if count%10 == 0 {
-				count = 0
-				glog.V(8).Infof("[%v] flush for clean up", w.name)
-				assembler.FlushOlderThan(time.Now().Add(-(10 * w.interval)))
-			} else {
-				glog.V(8).Infof("[%v] flush for parse", w.name)
-				assembler.FlushWithOptions(tcpassembly.FlushOptions{CloseAll: false, T: time.Now().Add(-w.interval)})
+				// close expired stream
+				glog.V(8).Infof("[%v] try to close expired stream", w.name)
+				assembly.CloseOlderThan(time.Now().Add(-w.interval))
 			}
 		}
 	}
+
 }

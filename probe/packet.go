@@ -3,7 +3,6 @@ package probe
 import (
 	"encoding/binary"
 	"errors"
-	"time"
 
 	"github.com/golang/glog"
 	"github.com/xwb1989/sqlparser"
@@ -13,9 +12,25 @@ import (
 
 // MysqlBasePacket is the complete packet with head and payload
 type MysqlBasePacket struct {
-	Header    []byte    // header
-	Data      []byte    // body
-	Timestamp time.Time // timestamp this packet assembled
+	Header []byte // header
+	Data   []byte // body
+}
+
+// DecodeFromBytes try to decode the first packet from bytes
+func (p *MysqlBasePacket) DecodeFromBytes(data []byte) (int, error) {
+	if len(data) < 4 {
+		return 0, errNotEnouthData
+	}
+
+	p.Header = data[0:4]
+	length := int(uint32(data[0]) | uint32(data[1])<<8 | uint32(data[2])<<16)
+
+	if length+4 > len(data) {
+		glog.Warningf("unexpected data length: %v, required: %v, data: %s", len(data), length+4, data)
+		return 0, errNotEnouthData
+	}
+	p.Data = data[4 : length+4]
+	return length + 4, nil
 }
 
 // Seq return the Sequence id
@@ -27,43 +42,6 @@ func (p *MysqlBasePacket) Seq() byte {
 func (p *MysqlBasePacket) Length() int {
 	return int(uint32(p.Header[0]) | uint32(p.Header[1])<<8 | uint32(p.Header[2])<<16)
 }
-
-// ReadMysqlBasePacket read and parse mysql base packet from a reader
-/*func ReadMysqlBasePacket(r *ReaderStream) (*MysqlBasePacket, error) {
-	var err error
-	head := make([]byte, 4)
-	if _, err = io.ReadFull(r, head); err != nil {
-		return nil, err
-	}
-	packet := &MysqlBasePacket{Len: head[:3], Seq: head[3], Timestamp: r.Seen()}
-	// parse head[len(3)|seq(1)]
-	length := int(uint32(head[0]) | uint32(head[1])<<8 | uint32(head[2])<<16)
-	packet.Data = make([]byte, length)
-	if _, err = io.ReadFull(r, packet.Data); err != nil {
-		return nil, err
-	}
-	return packet, nil
-}*/
-
-// ReadMysqlBasePacket read and parse mysql base packet from a reader
-/*func ReadMysqlBasePacket(reader *bufio.Reader) (*MysqlBasePacket, error) {
-	var err error
-	packet := &MysqlBasePacket{Len: make([]byte, 3)}
-	if _, err = reader.Read(packet.Len); err != nil {
-		return nil, err
-	}
-	length := int(uint32(packet.Len[0]) | uint32(packet.Len[1])<<8 | uint32(packet.Len[2])<<16)
-
-	if packet.Seq, err = reader.ReadByte(); err != nil {
-		return nil, err
-	}
-
-	packet.Data = make([]byte, length)
-	if _, err = reader.Read(packet.Data); err != nil {
-		return nil, err
-	}
-	return packet, nil
-}*/
 
 // MysqlPacket is the interface of MysqlRequestPacket and MysqlResponsePacket
 type MysqlPacket interface {
@@ -89,8 +67,8 @@ func (p *MysqlRequestPacket) Seq() uint8 {
 	return uint8(p.seq)
 }
 
-// Sql return the sql in query packet
-func (p *MysqlRequestPacket) Sql() string {
+// SQL return the sql in query packet
+func (p *MysqlRequestPacket) SQL() string {
 	return string(p.sql)
 }
 
@@ -125,8 +103,8 @@ func (p *MysqlResponsePacket) Seq() uint8 {
 	return uint8(p.seq)
 }
 
-// Sql return empty string just for interface compatiblility
-func (p *MysqlResponsePacket) Sql() string {
+// SQL return empty string just for interface compatiblility
+func (p *MysqlResponsePacket) SQL() string {
 	return ""
 }
 
@@ -155,7 +133,6 @@ func (p *MysqlResponsePacket) CMD() byte {
 
 var errNotEnouthData = errors.New("not enough data")
 var errParsedFailed = errors.New("parsed failed")
-var errNotMysqlPacket = errors.New("not a mysql packet")
 
 // MysqlResponseStatus retains parts of the query reponse data
 type MysqlResponseStatus struct {
@@ -166,24 +143,6 @@ type MysqlResponseStatus struct {
 	errno        uint16
 	message      string
 	stmtID       uint32
-}
-
-// DecodeFromBytes unmarshal mysql base packet form bytes
-func (p *MysqlBasePacket) DecodeFromBytes(data []byte) error {
-	if len(data) < 4 {
-		return errNotEnouthData
-	}
-
-	p.Header = data[0:4]
-	length := int(uint32(data[0]) | uint32(data[1])<<8 | uint32(data[2])<<16)
-
-	dataEnd := length + 4
-	if dataEnd > len(data) {
-		glog.Warningf("unexpected data length: %v, required: %v, data: %s", len(data), dataEnd, string(data[5:]))
-		return errNotMysqlPacket
-	}
-	p.Data = data[4:]
-	return nil
 }
 
 // ParseRequestPacket filter out the query packet
