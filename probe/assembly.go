@@ -2,7 +2,6 @@ package probe
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -19,12 +18,6 @@ type Key struct {
 
 func (k Key) String() string {
 	return fmt.Sprintf("%v:%v", k.net, k.transport)
-}
-
-// FlushContext specify which stream to enable or disable flushing
-type FlushContext struct {
-	key  Key  // stream key to flush
-	flag bool // enable or disable
 }
 
 // IsRequest is a callback set by user to distinguish flow direction.
@@ -83,7 +76,7 @@ func (s *MysqlStream) run() {
 				// parse request packet
 				// Note: there may be many mysql packets in one tcp packet.
 				// we only care about the first mysql packet,
-				// which should only be the first part of tcp payload
+				// which should only be the first part of tcp payload regardless of what the tcp packet seq is.
 				basePacket := &MysqlBasePacket{}
 				if _, err = basePacket.DecodeFromBytes(tcp.Payload); err != nil {
 					glog.V(6).Infof("[%v] parse request base packet failed: %v", s.name, err)
@@ -136,7 +129,7 @@ func (s *MysqlStream) run() {
 
 				// Note: there may be many mysql packets in one tcp packet.
 				// we only care about the first mysql packet,
-				// which should only be the first part of tcp payload
+				// which should only be the first part of tcp payload regardless of what the tcp packet seq is.
 				basePacket := &MysqlBasePacket{}
 				if _, err = basePacket.DecodeFromBytes(tcp.Payload); err != nil {
 					glog.V(6).Infof("[%v] parse response base packet failed: %v", s.name, err)
@@ -201,8 +194,6 @@ type Assembly struct {
 	out       chan<- *message.Message // channle to report message.
 	isRequest IsRequest               // check if it is a request stream.
 	wname     string                  // worker name for log.
-	flush     chan<- *FlushContext    // flush control.
-	sync.RWMutex
 }
 
 // Assemble send the packet to specify stream

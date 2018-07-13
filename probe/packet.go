@@ -10,6 +10,9 @@ import (
 	"github.com/deatheyes/MysqlProbe/util"
 )
 
+var errNotEnouthData = errors.New("not enough data")
+var errParsedFailed = errors.New("parsed failed")
+
 // MysqlBasePacket is the complete packet with head and payload
 type MysqlBasePacket struct {
 	Header []byte // header
@@ -43,16 +46,6 @@ func (p *MysqlBasePacket) Length() int {
 	return int(uint32(p.Header[0]) | uint32(p.Header[1])<<8 | uint32(p.Header[2])<<16)
 }
 
-// MysqlPacket is the interface of MysqlRequestPacket and MysqlResponsePacket
-type MysqlPacket interface {
-	Seq() uint8
-	Stmt() sqlparser.Statement
-	Sql() string
-	Status() *MysqlResponseStatus
-	StmtID() uint32
-	CMD() byte
-}
-
 // MysqlRequestPacket retains the infomation of query packet
 type MysqlRequestPacket struct {
 	seq    byte
@@ -77,11 +70,6 @@ func (p *MysqlRequestPacket) Stmt() sqlparser.Statement {
 	return p.stmt
 }
 
-// Status return the flag of OK packet
-func (p *MysqlRequestPacket) Status() *MysqlResponseStatus {
-	return nil
-}
-
 // StmtID return the statement id of a execution request
 func (p *MysqlRequestPacket) StmtID() uint32 {
 	return p.stmtID
@@ -103,11 +91,6 @@ func (p *MysqlResponsePacket) Seq() uint8 {
 	return uint8(p.seq)
 }
 
-// SQL return empty string just for interface compatiblility
-func (p *MysqlResponsePacket) SQL() string {
-	return ""
-}
-
 // Stmt return nil just for interface compatiblility
 func (p *MysqlResponsePacket) Stmt() sqlparser.Statement {
 	return nil
@@ -118,21 +101,13 @@ func (p *MysqlResponsePacket) Status() *MysqlResponseStatus {
 	return p.status
 }
 
-// StmtID return the statement id of a prepare request; return 0 for interface compatiblility
+// StmtID return the statement id of a prepare request; return 0 for compatiblility
 func (p *MysqlResponsePacket) StmtID() uint32 {
 	if p.status != nil {
 		return p.status.stmtID
 	}
 	return 0
 }
-
-// CMD return '-' just for interface compatiblility
-func (p *MysqlResponsePacket) CMD() byte {
-	return '-'
-}
-
-var errNotEnouthData = errors.New("not enough data")
-var errParsedFailed = errors.New("parsed failed")
 
 // MysqlResponseStatus retains parts of the query reponse data
 type MysqlResponseStatus struct {

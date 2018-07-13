@@ -16,8 +16,6 @@ type Worker struct {
 	owner        *Probe                  // owner.
 	in           chan gopacket.Packet    // input channel.
 	out          chan<- *message.Message // output channel.
-	flush        chan *FlushContext      // flush cotrol channel.
-	flushMap     map[Key]bool            // record stream flushing.
 	id           int                     // worker id.
 	logAllPacket bool                    // wether to log the paocket.
 	interval     time.Duration           // flush interval.
@@ -29,13 +27,11 @@ func NewProbeWorker(probe *Probe, out chan<- *message.Message, id int, interval 
 	p := &Worker{
 		owner:        probe,
 		in:           make(chan gopacket.Packet),
-		flush:        make(chan *FlushContext),
 		out:          out,
 		interval:     interval,
 		logAllPacket: logAllPacket,
 		id:           id,
 		name:         fmt.Sprintf("%v-%v", probe.device, id),
-		flushMap:     make(map[Key]bool),
 	}
 	go p.Run()
 	return p
@@ -54,7 +50,6 @@ func (w *Worker) Run() {
 		out:       w.out,
 		isRequest: f,
 		wname:     w.name,
-		flush:     w.flush,
 	}
 
 	ticker := time.Tick(w.interval)
