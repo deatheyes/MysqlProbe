@@ -12,7 +12,6 @@ package probe
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/golang/glog"
 	"github.com/google/gopacket"
@@ -58,7 +57,7 @@ func (p *Probe) Init() error {
 	p.localIPs = IPs
 	slice := []string{}
 	for _, h := range p.localIPs {
-		item := fmt.Sprintf("(src host %v and src port %v) or (dst host %v and port %v)", h, p.port, h, p.port)
+		item := fmt.Sprintf("(src host %v and src port %v) or (dst host %v and dst port %v)", h, p.port, h, p.port)
 		slice = append(slice, item)
 	}
 	p.filter = fmt.Sprintf("tcp and (%v)", strings.Join(slice, " or "))
@@ -96,7 +95,7 @@ func (p *Probe) Run() {
 
 	glog.Infof("probe run - %s", p)
 	for id := 0; id < p.workerNum; id++ {
-		p.workers = append(p.workers, NewProbeWorker(p, p.out, id, 5*time.Second, false))
+		p.workers = append(p.workers, NewProbeWorker(p, id))
 	}
 
 	// run probe.

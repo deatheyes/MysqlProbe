@@ -26,24 +26,24 @@ type IsRequest func(netFlow, tcpFlow gopacket.Flow) bool
 // MysqlStream is a tcp assembly stream wrapper of ReaderStream
 type MysqlStream struct {
 	assembly *Assembly            // owner
-	in       chan gopacket.Packet // input channel
-	localIP  string               // server ip
 	key      Key                  // hash key
+	localIP  string               // server ip
 	name     string               // stream name for log
 	lastSeen time.Time            // timestamp of the lastpacket processed
-	stop     chan struct{}        // notify close
 	closed   bool                 // close flag
+	stop     chan struct{}        // notify close
+	in       chan gopacket.Packet // input channel
 }
 
 func newMysqlStream(assembly *Assembly, localIP string, key Key) *MysqlStream {
 	s := &MysqlStream{
 		assembly: assembly,
-		in:       make(chan gopacket.Packet, 2000),
-		localIP:  localIP,
 		key:      key,
-		name:     fmt.Sprintf("%v - %v", assembly.wname, key),
-		stop:     make(chan struct{}),
+		localIP:  localIP,
+		name:     fmt.Sprintf("%v-%v", assembly.wname, key),
 		closed:   false,
+		stop:     make(chan struct{}),
+		in:       make(chan gopacket.Packet, inputQueueLength),
 	}
 	go s.run()
 	return s
@@ -108,7 +108,7 @@ func (s *MysqlStream) run() {
 				case comStmtExecute:
 					stmtID := reqPacket.StmtID()
 					if _, ok := stmtmap[stmtID]; !ok {
-						// no stmt possible query error or sequence error。
+						// no statement, the corresponding prepare request has not been captured.
 						glog.V(5).Infof("[%v] no corresponding local statement found, stmtID: %v", s.name, stmtID)
 					} else {
 						msg.SQL = stmtmap[stmtID]
@@ -116,7 +116,7 @@ func (s *MysqlStream) run() {
 					}
 				default:
 					// not the packet concerned, continue
-					glog.V(8).Infof("[%v] request packet received unconcerned packet", s.name)
+					glog.V(8).Infof("[%v] receive unconcerned request packet", s.name)
 					reqPacket = nil
 					continue
 				}
@@ -156,7 +156,7 @@ func (s *MysqlStream) run() {
 					msg.Err = false
 					msg.AffectRows = status.affectedRows
 					msg.ServerStatus = status.status
-					// if is a prepare request, register the sql and continue.
+					// if is a prepare request, register the sql.
 					if reqPacket.CMD() == comStmtPrepare {
 						glog.V(6).Infof("[%v] [prepare] response OK, stmtID: %v, sql: %v", s.name, rspPacket.StmtID(), reqPacket.SQL())
 						stmtmap[rspPacket.StmtID()] = reqPacket.SQL()
@@ -173,7 +173,7 @@ func (s *MysqlStream) run() {
 				// report
 				// don't report those message without SQL.
 				// there is no SQL in prepare message.
-				// need more precise filter about control command such as START, END
+				// need more precise filter about control command such as START, END.
 				if len(msg.SQL) > 5 {
 					glog.V(6).Infof("[%v] mysql query parsed done: %v", s.name, msg.SQL)
 					s.assembly.out <- msg

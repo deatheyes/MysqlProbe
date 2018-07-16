@@ -11,33 +11,29 @@ import (
 	"github.com/deatheyes/MysqlProbe/message"
 )
 
-// Worker assembles the data from tcp connection distributed by Probe
+// Worker assembles the data from tcp connection dispatched by Probe
 type Worker struct {
-	owner        *Probe                  // owner.
-	in           chan gopacket.Packet    // input channel.
-	out          chan<- *message.Message // output channel.
-	id           int                     // worker id.
-	logAllPacket bool                    // wether to log the paocket.
-	interval     time.Duration           // flush interval.
-	name         string                  // worker name for logging.
+	owner *Probe                  // owner.
+	in    chan gopacket.Packet    // input channel.
+	out   chan<- *message.Message // output channel.
+	id    int                     // worker id.
+	name  string                  // worker name for logging.
 }
 
-// NewProbeWorker create a new woker to assemble tcp data
-func NewProbeWorker(probe *Probe, out chan<- *message.Message, id int, interval time.Duration, logAllPacket bool) *Worker {
+// NewProbeWorker create a new woker to assemble tcp packets
+func NewProbeWorker(probe *Probe, id int) *Worker {
 	p := &Worker{
-		owner:        probe,
-		in:           make(chan gopacket.Packet),
-		out:          out,
-		interval:     interval,
-		logAllPacket: logAllPacket,
-		id:           id,
-		name:         fmt.Sprintf("%v-%v", probe.device, id),
+		owner: probe,
+		in:    make(chan gopacket.Packet),
+		out:   probe.out,
+		id:    id,
+		name:  fmt.Sprintf("%v-%v", probe.device, id),
 	}
 	go p.Run()
 	return p
 }
 
-// Run initilize and start the assembling process
+// Run initilizes and starts the assembly
 func (w *Worker) Run() {
 	f := func(netFlow, tcpFlow gopacket.Flow) bool {
 		ip := netFlow.Dst()
@@ -52,18 +48,19 @@ func (w *Worker) Run() {
 		wname:     w.name,
 	}
 
-	ticker := time.Tick(w.interval)
-	glog.Infof("[%v] init done, stream expiration: %v", w.name, w.interval)
+	ticker := time.NewTicker(streamExpiration)
+	defer ticker.Stop()
+
+	glog.Infof("[%v] initilization done, stream expiration: %v", w.name, streamExpiration)
 
 	for {
 		select {
 		case packet := <-w.in:
 			assembly.Assemble(packet)
-		case <-ticker:
+		case <-ticker.C:
 			// close expired stream
-			glog.V(8).Infof("[%v] try to close expired stream", w.name)
-			assembly.CloseOlderThan(time.Now().Add(-w.interval))
+			glog.V(8).Infof("[%v] try to close expired streams", w.name)
+			assembly.CloseOlderThan(time.Now().Add(-streamExpiration))
 		}
 	}
-
 }

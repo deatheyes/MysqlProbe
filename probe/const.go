@@ -1,5 +1,9 @@
 package probe
 
+import (
+	"time"
+)
+
 // mysql
 const (
 	iOK          byte = 0x00
@@ -37,4 +41,10 @@ const (
 	comStmtReset
 	comSetOption
 	comStmtFetch
+)
+
+// probe
+const (
+	inputQueueLength = 2000            // stream input queue length
+	streamExpiration = 5 * time.Second // empty stream expiration
 )

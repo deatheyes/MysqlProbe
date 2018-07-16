@@ -13,7 +13,7 @@ import (
 var errNotEnouthData = errors.New("not enough data")
 var errParsedFailed = errors.New("parsed failed")
 
-// MysqlBasePacket is the complete packet with head and payload
+// MysqlBasePacket is the complete packet with header and payload
 type MysqlBasePacket struct {
 	Header []byte // header
 	Data   []byte // body
@@ -87,7 +87,7 @@ type MysqlResponsePacket struct {
 	status *MysqlResponseStatus
 }
 
-// Seq return the sequence id in head
+// Seq return the sequence id in header
 func (p *MysqlResponsePacket) Seq() uint8 {
 	return uint8(p.seq)
 }
@@ -110,7 +110,7 @@ func (p *MysqlResponsePacket) StmtID() uint32 {
 	return 0
 }
 
-// MysqlResponseStatus retains parts of the query reponse data
+// MysqlResponseStatus retains parts of the query response data
 type MysqlResponseStatus struct {
 	flag         byte
 	affectedRows uint64
