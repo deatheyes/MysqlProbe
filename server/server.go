@@ -29,7 +29,7 @@ func NewServer(config *config.Config) *Server {
 	if config.Role != NodeRoleSlave {
 		flag = false
 	}
-	s.collector = NewCollector(s.dispatcher.In(), time.Duration(config.Interval)*time.Second, flag)
+	s.collector = NewCollector(s.dispatcher.In(), time.Duration(config.Interval)*time.Second, config.SlowThresholdMs, flag)
 	if config.Cluster.Gossip {
 		s.distributedSystem = NewGossipSystem(s, config.Role, config.Cluster.Group, config.Cluster.Port)
 	} else {

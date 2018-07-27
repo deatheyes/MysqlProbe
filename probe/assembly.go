@@ -28,6 +28,7 @@ type MysqlStream struct {
 	assembly *Assembly            // owner
 	key      Key                  // hash key
 	localIP  string               // server ip
+	clientIP string               // client ip
 	name     string               // stream name for log
 	lastSeen time.Time            // timestamp of the lastpacket processed
 	closed   bool                 // close flag
@@ -35,11 +36,12 @@ type MysqlStream struct {
 	in       chan gopacket.Packet // input channel
 }
 
-func newMysqlStream(assembly *Assembly, localIP string, key Key) *MysqlStream {
+func newMysqlStream(assembly *Assembly, localIP string, clientIP string, key Key) *MysqlStream {
 	s := &MysqlStream{
 		assembly: assembly,
 		key:      key,
 		localIP:  localIP,
+		clientIP: clientIP,
 		name:     fmt.Sprintf("%v-%v", assembly.wname, key),
 		closed:   false,
 		stop:     make(chan struct{}),
@@ -96,7 +98,11 @@ func (s *MysqlStream) run() {
 				s.lastSeen = packet.Metadata().Timestamp
 
 				// parse request and build message
-				msg = &message.Message{TimestampReq: s.lastSeen, IP: s.localIP}
+				msg = &message.Message{
+					TimestampReq: s.lastSeen,
+					ServerIP:     s.localIP,
+					ClientIP:     s.clientIP,
+				}
 				switch reqPacket.CMD() {
 				case comQuery:
 					// this is a raw sql query
@@ -148,6 +154,7 @@ func (s *MysqlStream) run() {
 				}
 				s.lastSeen = packet.Metadata().Timestamp
 				msg.TimestampRsp = s.lastSeen
+				msg.Latency = msg.TimestampRsp.Sub(msg.TimestampReq).Nanoseconds() / 1000
 
 				// parse reponse and fill message
 				status := rspPacket.Status()
@@ -202,15 +209,17 @@ func (a *Assembly) Assemble(packet gopacket.Packet) {
 	var s *MysqlStream
 	s = a.streamMap[key]
 	if s == nil {
-		var serverIP string
+		var serverIP, clientIP string
 		if a.isRequest(key.net, key.transport) {
 			serverIP = key.net.Dst().String()
+			clientIP = key.net.Src().String()
 		} else {
 			serverIP = key.net.Src().String()
+			clientIP = key.net.Dst().String()
 		}
 
 		reverse := Key{key.net.Reverse(), key.transport.Reverse()}
-		s = newMysqlStream(a, serverIP, key)
+		s = newMysqlStream(a, serverIP, clientIP, key)
 		a.streamMap[key] = s
 		a.streamMap[reverse] = s
 	}

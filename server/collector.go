@@ -37,12 +37,13 @@ type Collector struct {
 	configChanged     bool                  // reload flag
 	qps               *util.RollingNumber   // qps caculator
 	latency           *util.RollingNumber   // latency caculator
+	slowThreshold     int64                 // threshold to record slow querys
 
 	sync.Mutex
 }
 
 // NewCollector create a collecotr
-func NewCollector(report chan<- []byte, reportPeriod time.Duration, disableConnection bool) *Collector {
+func NewCollector(report chan<- []byte, reportPeriod time.Duration, slowThreshold int64, disableConnection bool) *Collector {
 	qps, _ := util.NewRollingNumber(10000, 100)
 	latency, _ := util.NewRollingNumber(10000, 100)
 	return &Collector{
@@ -62,6 +63,7 @@ func NewCollector(report chan<- []byte, reportPeriod time.Duration, disableConne
 		configChanged:     false,
 		qps:               qps,
 		latency:           latency,
+		slowThreshold:     slowThreshold,
 	}
 }
 
@@ -129,7 +131,7 @@ func (c *Collector) innerupdate() {
 					go client.readPump()
 				}
 			} else {
-				glog.Warningf("collector has added noed: %v", addr)
+				glog.Warningf("collector has added node: %v", addr)
 			}
 		case addr := <-c.unregisterAddr:
 			// remove a node if exists
@@ -227,9 +229,9 @@ func (c *Collector) assembleReport(target, slice *message.Report) {
 	// merge report
 	target.Merge(slice)
 	// caculate qps
-	for k, group := range slice.Groups {
-		c.qps.Add(k, int64(group.SuccessCount+group.FailedCount))
-		c.latency.Add(k, int64(group.SuccCostUsTotal+group.FailedCostUsTotal))
+	for k, v := range slice.Overview {
+		c.qps.Add(k, int64(v.Summary.SuccessCount+v.Summary.FailedCount))
+		c.latency.Add(k, int64(v.Summary.SuccCostUsTotal+v.Summary.FailedCostUsTotal))
 	}
 }
 
@@ -237,12 +239,13 @@ func (c *Collector) assembleReport(target, slice *message.Report) {
 func (c *Collector) assembleMessage(target *message.Report, slice *message.Message) {
 	glog.V(7).Infof("[collector] merge message: %v", slice.SQL)
 	// merge message
-	target.AddMessage(slice)
+	slow := (slice.Latency / 1000) > c.slowThreshold
+	target.AddMessage(slice, slow)
 	// caculate qps
-	key := slice.HashKey()
+	key := slice.SQL
 	c.qps.Add(key, 1)
 	// caculate latency us
-	c.latency.Add(key, slice.TimestampRsp.Sub(slice.TimestampReq).Nanoseconds()/1000)
+	c.latency.Add(key, slice.Latency)
 }
 
 // Run start the main assembling process on message and report level
@@ -279,13 +282,13 @@ func (c *Collector) Run() {
 		case <-ticker.C:
 			glog.V(7).Info("collector flush report")
 			// report and flush merged data
-			if len(report.Groups) > 0 {
+			if len(report.Overview) > 0 {
 				// merge summary info
-				for k, group := range report.Groups {
-					group.QPS = c.qps.AverageInSecond(k)
+				for k, v := range report.Overview {
+					v.QPS = c.qps.AverageInSecond(k)
 					sum := c.qps.Sum(k)
 					if sum != 0 {
-						group.AverageLatency = c.latency.Sum(k) / sum
+						v.AverageLatency = c.latency.Sum(k) / sum
 					}
 				}
 				if data, err := message.EncodeReportToBytes(report); err != nil {

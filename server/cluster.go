@@ -33,6 +33,7 @@ const (
 	SeedsFileName = "seeds.yaml"
 )
 
+// Broadcast is the implicment of memberlists' Broadcast
 type Broadcast struct {
 	msg    []byte
 	notify chan<- struct{}

@@ -14,6 +14,7 @@ type Dispatcher struct {
 	unregister chan *Client     // client unregister channel
 }
 
+// NewDispatcher create a new Dispatcher object
 func NewDispatcher() *Dispatcher {
 	return &Dispatcher{
 		clients:    make(map[*Client]bool),
@@ -23,6 +24,7 @@ func NewDispatcher() *Dispatcher {
 	}
 }
 
+// Run starts the push process
 func (d *Dispatcher) Run() {
 	for {
 		select {
@@ -50,6 +52,7 @@ func (d *Dispatcher) Run() {
 	}
 }
 
+// In return the broadcast channel
 func (d *Dispatcher) In() chan<- []byte {
 	return d.broadcast
 }

@@ -10,13 +10,14 @@ import (
 
 // Config holds the parameters starting  probe, server and cluster
 type Config struct {
-	Slave    bool    `yaml:"slave"`      // run as slave in the cluster
-	Port     uint16  `yaml:"serverport"` // server port
-	Interval uint16  `yaml:"interval"`   // report interval
-	Cluster  Cluster `yaml:"cluster"`    // cluster config
-	Probe    Probe   `yaml:"probe"`      // probe conifg, only slave will start a probe
-	Role     string  `yaml:"-"`          // role of this node
-	Path     string  `yaml:"-"`          // config file path
+	Slave           bool    `yaml:"slave"`           // run as slave in the cluster
+	Port            uint16  `yaml:"serverport"`      // server port
+	Interval        uint16  `yaml:"interval"`        // report interval
+	SlowThresholdMs int64   `yaml:"slowthresholdms"` // threshold to record slow query
+	Cluster         Cluster `yaml:"cluster"`         // cluster config
+	Probe           Probe   `yaml:"probe"`           // probe conifg, only slave will start a probe
+	Role            string  `yaml:"-"`               // role of this node
+	Path            string  `yaml:"-"`               // config file path
 }
 
 // Cluster specify the arguments to run cluster

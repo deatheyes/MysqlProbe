@@ -2,7 +2,6 @@ package message
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 )
 
@@ -26,27 +25,29 @@ const (
 
 // Message is the info of a sql query
 type Message struct {
-	IP           string    `json:"ip"`            // server ip.
-	SQL          string    `json:"sql"`           // templated sql.
-	Err          bool      `json:"error"`         // sql process error.
-	ErrMsg       string    `json:"error_message"` // sql process error message.
-	Errno        uint16    `json:"errno"`         // sql process error number.
-	ServerStatus uint16    `json:"server_status"` // server response status code.
-	AffectRows   uint64    `json:"affect_rows"`   // affect rows.
-	TimestampReq time.Time `json:"request_time"`  // timestamp for request package.
-	TimestampRsp time.Time `json:"rsponse_time"`  // timestamp for response package.
+	SQL          string    `json:"sql"`           // templated sql
+	Raw          string    `json:"raw"`           // raw sql
+	Err          bool      `json:"error"`         // sql process error
+	ErrMsg       string    `json:"error_message"` // sql process error message
+	Errno        uint16    `json:"errno"`         // sql process error number
+	ServerStatus uint16    `json:"server_status"` // server response status code
+	AffectRows   uint64    `json:"affect_rows"`   // affect rows
+	TimestampReq time.Time `json:"request_time"`  // timestamp for request package
+	TimestampRsp time.Time `json:"rsponse_time"`  // timestamp for response package
+	Latency      int64     `json:"latency"`       // latency in microsecond
+	ServerIP     string    `json:"server_ip"`     // server ip
+	ServerPort   uint16    `json:"server_port"`   // server port
+	ClientIP     string    `json:"client_ip"`     // client ip
+	ClientPort   uint16    `json:"client_port"`   // client port
 }
 
-// HashKey return a string
+// HashKey for map
 func (m *Message) HashKey() string {
-	return fmt.Sprintf("%v | %v", m.SQL, m.IP)
+	return m.SQL
 }
 
-// MessageGroup is the assembled info of a sql template
-type MessageGroup struct {
-	// summary
-	QPS               int64     `json:"qps"`                       // current qps
-	AverageLatency    int64     `json:"avg_latency"`               // average latency
+// Summary is a collection of counters
+type Summary struct {
 	SuccessCount      int       `json:"success"`                   // success query number
 	FailedCount       int       `json:"failed"`                    // failed query number
 	LastSeen          time.Time `json:"last_seen"`                 // the latest timestamp
@@ -55,111 +56,226 @@ type MessageGroup struct {
 	NoGoodIndexUsed   int64     `json:"status_no_good_index_used"` // count of SERVER_STATUS_NO_GOOD_INDEX_USED
 	NoIndexUsed       int64     `json:"status_no_index_used"`      // count of SERVER_STATUS_NO_INDEX_USED
 	QueryWasSlow      int64     `json:"status_query_was_slow"`     // count of SERVER_QUERY_WAS_SLOW
-
-	// detail
-	//Messages []*Message `json:"messages"` // detail info of the query
 }
 
-// Merge assemlbe another message group to this one
-func (g *MessageGroup) Merge(ag *MessageGroup) {
-	if ag == nil {
-		return
+// Merge another summary into this one
+func (s *Summary) Merge(as *Summary) bool {
+	if as == nil {
+		return false
 	}
 
-	//if len(ag.Messages) == 0 {
-	//	return
-	//}
+	s.SuccessCount += as.SuccessCount
+	s.FailedCount += as.FailedCount
+	if s.LastSeen.Before(as.LastSeen) {
+		s.LastSeen = as.LastSeen
+	}
+	s.SuccCostUsTotal += as.SuccCostUsTotal
+	s.FailedCostUsTotal += as.FailedCostUsTotal
+	s.NoIndexUsed += as.NoIndexUsed
+	s.NoGoodIndexUsed += as.NoGoodIndexUsed
+	s.QueryWasSlow += as.QueryWasSlow
+	return true
+}
 
-	if g.SuccessCount == 0 && g.FailedCount == 0 {
-		g.SuccessCount = ag.SuccessCount
-		g.FailedCount = ag.FailedCount
-		g.LastSeen = ag.LastSeen
-		g.SuccCostUsTotal = ag.SuccCostUsTotal
-		g.FailedCostUsTotal = ag.FailedCostUsTotal
-		g.NoIndexUsed = ag.NoIndexUsed
-		g.NoGoodIndexUsed = ag.NoGoodIndexUsed
-		g.QueryWasSlow = ag.QueryWasSlow
+// AddMessage asseble a Message to this summary
+func (s *Summary) AddMessage(m *Message) bool {
+	if m == nil {
+		return false
+	}
+
+	if m.Err {
+		s.FailedCount++
+		s.FailedCostUsTotal += m.Latency
 	} else {
-		g.SuccessCount += ag.SuccessCount
-		g.FailedCount += ag.FailedCount
-		if g.LastSeen.Before(ag.LastSeen) {
-			g.LastSeen = ag.LastSeen
-		}
-		g.SuccCostUsTotal += ag.SuccCostUsTotal
-		g.FailedCostUsTotal += ag.FailedCostUsTotal
-		g.NoIndexUsed += ag.NoIndexUsed
-		g.NoGoodIndexUsed += ag.NoGoodIndexUsed
-		g.QueryWasSlow += ag.QueryWasSlow
+		s.SuccessCount++
+		s.SuccCostUsTotal += m.Latency
 	}
-	//g.Messages = append(g.Messages, ag.Messages[:]...)
+
+	if s.LastSeen.Before(m.TimestampReq) {
+		s.LastSeen = m.TimestampReq
+	}
+	// status flags
+	if m.ServerStatus&ServerStatusNoIndexUsed != 0 {
+		s.NoIndexUsed++
+	}
+	if m.ServerStatus&ServerStatusNoGoodIndexUsed != 0 {
+		s.NoGoodIndexUsed++
+	}
+	if m.ServerStatus&ServerQueryWasSlow != 0 {
+		s.QueryWasSlow++
+	}
+	return true
 }
 
-// Report is the data sent to master or user
+// GlobalSummary extend Summary with average values and query samples
+type GlobalSummary struct {
+	Summary        *Summary   `json:"summary"`     // counters
+	QPS            int64      `json:"qps"`         // current qps
+	AverageLatency int64      `json:"avg_latency"` // average latency
+	SQL            string     `json:"sql"`         // sql template
+	Slow           []*Message `json:"slow"`        // slow querys
+}
+
+// Merge another summary into this one
+func (s *GlobalSummary) Merge(as *GlobalSummary) bool {
+	if !s.Summary.Merge(as.Summary) {
+		return false
+	}
+	s.Slow = append(s.Slow, as.Slow[:]...)
+	return true
+}
+
+// AddMessage merge a Message into this summary
+func (s *GlobalSummary) AddMessage(m *Message, reserve bool) bool {
+	if !s.Summary.AddMessage(m) {
+		return false
+	}
+
+	if reserve {
+		s.Slow = append(s.Slow, m)
+	}
+	return true
+}
+
+// ClientSummary extend Summary with client ip
+type ClientSummary struct {
+	Summary map[string]*Summary `json:"summary"` // counters
+}
+
+func newClientSummary() *ClientSummary {
+	return &ClientSummary{
+		Summary: make(map[string]*Summary),
+	}
+}
+
+// Merge another summary into this one
+func (s *ClientSummary) Merge(as *ClientSummary) bool {
+	if as == nil {
+		return false
+	}
+
+	for k, v := range as.Summary {
+		if s.Summary[k] != nil {
+			s.Summary[k].Merge(v)
+		} else {
+			s.Summary[k] = v
+		}
+	}
+	return true
+}
+
+// AddMessage merge a Message into this summary
+func (s *ClientSummary) AddMessage(m *Message) bool {
+	if m == nil {
+		return false
+	}
+
+	v := s.Summary[m.SQL]
+	if v == nil {
+		v = &Summary{}
+		s.Summary[m.SQL] = v
+	}
+	return v.AddMessage(m)
+}
+
+// ServerSummary group client summary by server ip
+type ServerSummary struct {
+	Clients map[string]*ClientSummary `json:"clients"` // client summary group
+}
+
+func newServerSummary(ip string) *ServerSummary {
+	return &ServerSummary{
+		Clients: make(map[string]*ClientSummary),
+	}
+}
+
+// Merge another summary into this one
+func (s *ServerSummary) Merge(as *ServerSummary) bool {
+	if as == nil {
+		return false
+	}
+
+	for k, v := range as.Clients {
+		if s.Clients[k] != nil {
+			s.Clients[k].Merge(v)
+		} else {
+			s.Clients[k] = v
+		}
+	}
+	return true
+}
+
+// AddMessage merge a Message into this summary
+func (s *ServerSummary) AddMessage(m *Message) bool {
+	if m == nil {
+		return false
+	}
+
+	c := s.Clients[m.ClientIP]
+	if c == nil {
+		c = newClientSummary()
+		s.Clients[m.ClientIP] = c
+	}
+	c.AddMessage(m)
+	return true
+}
+
+// Report group captured info by server
 type Report struct {
-	Groups map[string]*MessageGroup `json:"groups"`
+	Overview map[string]*GlobalSummary `json:"overview"` // overview summary group
+	Servers  map[string]*ServerSummary `json:"servers"`  // server summary group
 }
 
-// NewReport create a Report
+// NewReport create a Report object
 func NewReport() *Report {
-	return &Report{Groups: make(map[string]*MessageGroup)}
-}
-
-// AddMessage asseble a Message to this Report
-func (r *Report) AddMessage(m *Message) {
-	key := m.HashKey()
-	g := r.Groups[key]
-	cost := m.TimestampRsp.Sub(m.TimestampReq).Nanoseconds() / 1000000
-	if g == nil {
-		g = &MessageGroup{}
-		if m.Err {
-			g.FailedCount = 1
-			g.FailedCostUsTotal = cost
-		} else {
-			g.SuccessCount = 1
-			g.SuccCostUsTotal = cost
-		}
-
-		g.LastSeen = m.TimestampReq
-		//g.Messages = append(g.Messages, m)
-		r.Groups[key] = g
-	} else {
-		if m.Err {
-			g.FailedCostUsTotal = cost
-			g.FailedCount++
-		} else {
-			g.SuccCostUsTotal += cost
-			g.SuccessCount++
-		}
-
-		if g.LastSeen.Before(m.TimestampReq) {
-			g.LastSeen = m.TimestampReq
-		}
-		//g.Messages = append(g.Messages, m)
-	}
-
-	switch m.ServerStatus {
-	case ServerStatusNoGoodIndexUsed:
-		g.NoGoodIndexUsed++
-	case ServerQueryWasSlow:
-		g.QueryWasSlow++
-	case ServerStatusNoIndexUsed:
-		g.NoIndexUsed++
+	return &Report{
+		Overview: make(map[string]*GlobalSummary),
+		Servers:  make(map[string]*ServerSummary),
 	}
 }
 
 // Merge assemble another Report to this one
 func (r *Report) Merge(ar *Report) {
-	if ar == nil {
+	if r == nil {
 		return
 	}
 
-	for k, g := range ar.Groups {
-		if r.Groups[k] != nil {
-			r.Groups[k].Merge(g)
+	for k, v := range ar.Overview {
+		if r.Overview[k] != nil {
+			r.Overview[k].Merge(v)
 		} else {
-			r.Groups[k] = g
+			r.Overview[k] = v
 		}
 	}
+
+	for k, v := range ar.Servers {
+		if r.Servers[k] != nil {
+			r.Servers[k].Merge(v)
+		} else {
+			r.Servers[k] = v
+		}
+	}
+}
+
+// AddMessage asseble a Message to this Report
+func (r *Report) AddMessage(m *Message, slow bool) bool {
+	if m == nil {
+		return false
+	}
+
+	s := r.Servers[m.ServerIP]
+	if s == nil {
+		s = newServerSummary(m.ServerIP)
+		r.Servers[m.ServerIP] = s
+	}
+	s.AddMessage(m)
+
+	o := r.Overview[m.SQL]
+	if o == nil {
+		o = &GlobalSummary{Summary: &Summary{}}
+		r.Overview[m.SQL] = o
+	}
+	return o.AddMessage(m, slow)
 }
 
 // DecodeReportFromBytes unmarshal bytes to a Report
