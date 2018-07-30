@@ -16,6 +16,7 @@ type Config struct {
 	SlowThresholdMs int64   `yaml:"slowthresholdms"` // threshold to record slow query
 	Cluster         Cluster `yaml:"cluster"`         // cluster config
 	Probe           Probe   `yaml:"probe"`           // probe conifg, only slave will start a probe
+	Pusher          Pusher  `yaml:"pusher"`          // pusher config
 	Role            string  `yaml:"-"`               // role of this node
 	Path            string  `yaml:"-"`               // config file path
 }
@@ -33,6 +34,12 @@ type Probe struct {
 	Port    uint16 `yaml:"port"`         // port for bpf filter
 	SnapLen int32  `yaml:"snappylength"` // snappy buffer length
 	Workers int    `yaml:"workers"`      // worker number
+}
+
+// Pusher specify the arguments to create static receiver pool
+type Pusher struct {
+	Servers string `yaml:"servers"` // server list splited by ','
+	Path    string `yanl:"path"`    // websocket path
 }
 
 // ReadFile load config from file

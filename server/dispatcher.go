@@ -12,15 +12,17 @@ type Dispatcher struct {
 	broadcast  chan []byte      // inbound messages
 	register   chan *Client     // client register channel
 	unregister chan *Client     // client unregister channel
+	pusher     *Pusher          // pool to push message
 }
 
 // NewDispatcher create a new Dispatcher object
-func NewDispatcher() *Dispatcher {
+func NewDispatcher(pusher *Pusher) *Dispatcher {
 	return &Dispatcher{
 		clients:    make(map[*Client]bool),
 		broadcast:  make(chan []byte),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
+		pusher:     pusher,
 	}
 }
 
@@ -40,12 +42,21 @@ func (d *Dispatcher) Run() {
 			}
 		case message := <-d.broadcast:
 			glog.V(6).Info("dispatcher receive report")
+			// push data to dynamic servers
 			for client := range d.clients {
 				select {
 				case client.send <- message:
 				default:
 					close(client.send)
 					delete(d.clients, client)
+				}
+			}
+			// push data to static server pool
+			if d.pusher != nil {
+				select {
+				case d.pusher.send <- message:
+				default:
+					glog.Warning("[pusher] queue full")
 				}
 			}
 		}

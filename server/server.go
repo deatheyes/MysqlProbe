@@ -21,7 +21,7 @@ type Server struct {
 // NewServer create a server by config
 func NewServer(config *config.Config) *Server {
 	s := &Server{
-		dispatcher: NewDispatcher(),
+		dispatcher: NewDispatcher(nil),
 		config:     config,
 	}
 

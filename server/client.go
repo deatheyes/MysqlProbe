@@ -77,7 +77,9 @@ func (c *Client) writePump() {
 
 func (c *Client) readPump() {
 	defer func() {
-		c.hub.Unregister() <- c
+		if c.hub != nil {
+			c.hub.Unregister() <- c
+		}
 		c.conn.Close()
 		c.dead = true
 	}()
@@ -101,6 +103,8 @@ func (c *Client) readPump() {
 			}
 			break
 		}
-		c.hub.ProcessData(data)
+		if c.hub != nil {
+			c.hub.ProcessData(data)
+		}
 	}
 }
