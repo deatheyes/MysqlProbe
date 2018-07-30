@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -24,6 +25,15 @@ func NewServer(config *config.Config) *Server {
 		dispatcher: NewDispatcher(nil),
 		config:     config,
 	}
+
+	var pusher *Pusher
+	if len(config.Pusher.Servers) == 0 {
+		pusher = nil
+	} else {
+		servers := strings.Split(config.Pusher.Servers, ",")
+		pusher = newPusher(servers, config.Pusher.Path, config.Pusher.Preconnect)
+	}
+	s.dispatcher = NewDispatcher(pusher)
 
 	flag := true
 	if config.Role != NodeRoleSlave {

@@ -38,8 +38,9 @@ type Probe struct {
 
 // Pusher specify the arguments to create static receiver pool
 type Pusher struct {
-	Servers string `yaml:"servers"` // server list splited by ','
-	Path    string `yanl:"path"`    // websocket path
+	Servers    string `yaml:"servers"`    // server list splited by ','
+	Path       string `yaml:"path"`       // websocket path
+	Preconnect bool   `yaml:"preconnect"` // preconnect to all servers
 }
 
 // ReadFile load config from file
