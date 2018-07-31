@@ -192,21 +192,19 @@ func (s *SQLSummary) AddMessage(m *Message) bool {
 type ServerSummary struct {
 	Overview  map[string]*SQLSummary    `json:"overview"`  // overview
 	Timestamp time.Time                 `json:"timestamp"` // timestamp for this summary
-	IP        string                    `json:"ip"`        // server ip
 	Clients   map[string]*ClientSummary `json:"clients"`   // client summary group
 }
 
 func newServerSummary(ip string) *ServerSummary {
 	return &ServerSummary{
 		Clients:   make(map[string]*ClientSummary),
-		IP:        ip,
 		Timestamp: time.Now(),
 	}
 }
 
 // Merge another summary into this one
 func (s *ServerSummary) Merge(as *ServerSummary) bool {
-	if as == nil || s.IP != as.IP {
+	if as == nil {
 		return false
 	}
 
