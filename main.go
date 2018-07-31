@@ -14,6 +14,7 @@ import (
 	"github.com/deatheyes/MysqlProbe/config"
 	"github.com/deatheyes/MysqlProbe/probe"
 	"github.com/deatheyes/MysqlProbe/server"
+	"github.com/deatheyes/MysqlProbe/util"
 )
 
 var (
@@ -69,6 +70,21 @@ func main() {
 			return
 		}
 
+		// default watcher config
+		if len(conf.Watcher.Uname) == 0 {
+			conf.Watcher.Uname = "test"
+		}
+		if len(conf.Watcher.Password) == 0 {
+			conf.Watcher.Password = "test"
+		}
+		if len(conf.Watcher.Address) == 0 {
+			conf.Watcher.Address = "localhost:3306"
+		}
+		if len(conf.Watcher.DBname) == 0 {
+			conf.Watcher.DBname = "test"
+		}
+
+		w := util.NewConnectionWatcher(conf.Watcher.Uname, conf.Watcher.Password, conf.Watcher.Address, conf.Watcher.DBname)
 		// probe all ports is prohibited
 		if conf.Probe.Port == 0 {
 			glog.Fatal("start probe failed, no probe port specified")
@@ -88,7 +104,7 @@ func main() {
 			if len(device) != 0 {
 				// start probe
 				glog.Infof("run probe, device: %v snappylength: %v port: %v workers: %v", device, conf.Probe.SnapLen, conf.Probe.Port, conf.Probe.Workers)
-				p := probe.NewProbe(device, conf.Probe.SnapLen, conf.Probe.Port, conf.Probe.Workers, s.Collector().MessageIn())
+				p := probe.NewProbe(device, conf.Probe.SnapLen, conf.Probe.Port, conf.Probe.Workers, s.Collector().MessageIn(), w)
 				if err := p.Init(); err != nil {
 					glog.Fatalf("init probe failed: %v", err)
 					return

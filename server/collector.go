@@ -237,7 +237,7 @@ func (c *Collector) assembleMessage(target *message.Report, slice *message.Messa
 	slow := (slice.Latency / 1000) > c.slowThreshold
 	target.AddMessage(slice, slow)
 	// caculate qps
-	key := slice.HashKey()
+	key := slice.SummaryHashKey()
 	c.qps.Add(key, 1)
 	// caculate latency us
 	c.latency.Add(key, slice.Latency)
@@ -280,11 +280,13 @@ func (c *Collector) Run() {
 			if c.disableConnection {
 				// slave need to caculate the average values
 				for _, server := range report.Servers {
-					for k, v := range server.Overview {
-						v.QPS = c.qps.AverageInSecond(k)
-						sum := c.qps.Sum(k)
-						if sum != 0 {
-							v.Latency = c.latency.Sum(k) / sum
+					for _, v := range server.Overview {
+						for _, n := range v.Groups {
+							n.QPS = c.qps.AverageInSecond(n.Key)
+							sum := c.qps.Sum(n.Key)
+							if sum != 0 {
+								n.Latency = c.latency.Sum(n.Key) / sum
+							}
 						}
 					}
 				}

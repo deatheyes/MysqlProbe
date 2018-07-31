@@ -33,10 +33,11 @@ type Probe struct {
 	workers   []*Worker               // probe worker group processing packet.
 	workerNum int                     // worker number.
 	out       chan<- *message.Message // data collect channel.
+	watcher   *util.ConnectionWatcher // db connection watcher.
 }
 
 // NewProbe create a probe to collect and parse packets
-func NewProbe(device string, snapLen int32, port uint16, workerNum int, out chan<- *message.Message) *Probe {
+func NewProbe(device string, snapLen int32, port uint16, workerNum int, out chan<- *message.Message, watcher *util.ConnectionWatcher) *Probe {
 	p := &Probe{
 		device:    device,
 		snapLen:   snapLen,
@@ -44,6 +45,7 @@ func NewProbe(device string, snapLen int32, port uint16, workerNum int, out chan
 		inited:    false,
 		workerNum: workerNum,
 		out:       out,
+		watcher:   watcher,
 	}
 	return p
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/google/gopacket/layers"
 
 	"github.com/deatheyes/MysqlProbe/message"
+	"github.com/deatheyes/MysqlProbe/util"
 )
 
 // Key is the pair of networker and transport Flow
@@ -25,27 +26,31 @@ type IsRequest func(netFlow, tcpFlow gopacket.Flow) bool
 
 // MysqlStream is a tcp assembly stream wrapper of ReaderStream
 type MysqlStream struct {
-	assembly *Assembly            // owner
-	key      Key                  // hash key
-	localIP  string               // server ip
-	clientIP string               // client ip
-	name     string               // stream name for log
-	lastSeen int64                // timestamp of the lastpacket processed
-	closed   bool                 // close flag
-	stop     chan struct{}        // notify close
-	in       chan gopacket.Packet // input channel
+	assembly   *Assembly            // owner
+	key        Key                  // hash key
+	localIP    string               // server ip
+	localPort  string               // server port
+	clientIP   string               // client ip
+	clientPort string               // client port
+	name       string               // stream name for log
+	lastSeen   int64                // timestamp of the lastpacket processed
+	closed     bool                 // close flag
+	stop       chan struct{}        // notify close
+	in         chan gopacket.Packet // input channel
 }
 
-func newMysqlStream(assembly *Assembly, localIP string, clientIP string, key Key) *MysqlStream {
+func newMysqlStream(assembly *Assembly, localIP string, localPort string, clientIP string, clientPort string, key Key) *MysqlStream {
 	s := &MysqlStream{
-		assembly: assembly,
-		key:      key,
-		localIP:  localIP,
-		clientIP: clientIP,
-		name:     fmt.Sprintf("%v-%v", assembly.wname, key),
-		closed:   false,
-		stop:     make(chan struct{}),
-		in:       make(chan gopacket.Packet, inputQueueLength),
+		assembly:   assembly,
+		key:        key,
+		localIP:    localIP,
+		localPort:  localPort,
+		clientIP:   clientIP,
+		clientPort: clientPort,
+		name:       fmt.Sprintf("%v-%v", assembly.wname, key),
+		closed:     false,
+		stop:       make(chan struct{}),
+		in:         make(chan gopacket.Packet, inputQueueLength),
 	}
 	go s.run()
 	return s
@@ -182,7 +187,16 @@ func (s *MysqlStream) run() {
 				// there is no SQL in prepare message.
 				// need more precise filter about control command such as START, END.
 				if len(msg.SQL) > 5 {
+					// find db name
+					clientAddr := s.clientIP + ":" + s.clientPort
+					if info := s.assembly.watcher.Get(clientAddr); info != nil {
+						msg.DB = string(info.DB)
+					} else {
+						msg.DB = unknowDbName
+					}
+
 					glog.V(6).Infof("[%v] mysql query parsed done: %v", s.name, msg.SQL)
+
 					s.assembly.out <- msg
 				}
 				reqPacket = nil
@@ -201,6 +215,7 @@ type Assembly struct {
 	out       chan<- *message.Message // channle to report message.
 	isRequest IsRequest               // check if it is a request stream.
 	wname     string                  // worker name for log.
+	watcher   *util.ConnectionWatcher // wathcer to get connection info
 }
 
 // Assemble send the packet to specify stream
@@ -210,16 +225,21 @@ func (a *Assembly) Assemble(packet gopacket.Packet) {
 	s = a.streamMap[key]
 	if s == nil {
 		var serverIP, clientIP string
+		var serverPort, clientPort string
 		if a.isRequest(key.net, key.transport) {
 			serverIP = key.net.Dst().String()
+			serverPort = key.transport.Dst().String()
 			clientIP = key.net.Src().String()
+			clientPort = key.transport.Src().String()
 		} else {
 			serverIP = key.net.Src().String()
+			serverPort = key.transport.Src().String()
 			clientIP = key.net.Dst().String()
+			clientPort = key.transport.Dst().String()
 		}
 
 		reverse := Key{key.net.Reverse(), key.transport.Reverse()}
-		s = newMysqlStream(a, serverIP, clientIP, key)
+		s = newMysqlStream(a, serverIP, serverPort, clientIP, clientPort, key)
 		a.streamMap[key] = s
 		a.streamMap[reverse] = s
 	}

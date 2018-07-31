@@ -46,6 +46,7 @@ func (w *Worker) Run() {
 		out:       w.out,
 		isRequest: f,
 		wname:     w.name,
+		watcher:   w.owner.watcher,
 	}
 
 	ticker := time.NewTicker(streamExpiration)
