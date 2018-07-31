@@ -216,10 +216,11 @@ func (s *DBSummary) AddMessage(m *Message, slow bool) bool {
 		return false
 	}
 
-	g := s.Groups[m.DB]
+	key := m.HashKey()
+	g := s.Groups[key]
 	if g == nil {
 		g = &Summary{}
-		s.Groups[m.DB] = g
+		s.Groups[key] = g
 	}
 	return g.AddMessage(m, slow)
 }
@@ -270,7 +271,7 @@ func (s *ServerSummary) AddMessage(m *Message, slow bool) bool {
 		return false
 	}
 
-	key := m.HashKey()
+	key := m.DB
 	if s.Overview[key] == nil {
 		s.Overview[key] = newDBSummary()
 	}
