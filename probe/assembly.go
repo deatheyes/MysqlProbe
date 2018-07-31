@@ -30,7 +30,7 @@ type MysqlStream struct {
 	localIP  string               // server ip
 	clientIP string               // client ip
 	name     string               // stream name for log
-	lastSeen time.Time            // timestamp of the lastpacket processed
+	lastSeen int64                // timestamp of the lastpacket processed
 	closed   bool                 // close flag
 	stop     chan struct{}        // notify close
 	in       chan gopacket.Packet // input channel
@@ -95,7 +95,7 @@ func (s *MysqlStream) run() {
 					glog.V(6).Infof("[%v] parse request packet failed: %v", s.name, err)
 					continue
 				}
-				s.lastSeen = packet.Metadata().Timestamp
+				s.lastSeen = packet.Metadata().Timestamp.UnixNano()
 
 				// parse request and build message
 				msg = &message.Message{
@@ -152,9 +152,9 @@ func (s *MysqlStream) run() {
 					glog.V(6).Infof("[%v] parse request packet failed: %v", s.name, err)
 					continue
 				}
-				s.lastSeen = packet.Metadata().Timestamp
+				s.lastSeen = packet.Metadata().Timestamp.UnixNano()
 				msg.TimestampRsp = s.lastSeen
-				msg.Latency = msg.TimestampRsp.Sub(msg.TimestampReq).Nanoseconds() / 1000
+				msg.Latency = (msg.TimestampRsp - msg.TimestampReq) / 1000
 
 				// parse reponse and fill message
 				status := rspPacket.Status()
@@ -230,7 +230,7 @@ func (a *Assembly) Assemble(packet gopacket.Packet) {
 func (a *Assembly) CloseOlderThan(t time.Time) int {
 	count := 0
 	for k, v := range a.streamMap {
-		if v.lastSeen.Before(t) {
+		if v.lastSeen < t.UnixNano() {
 			count++
 			v.close()
 			delete(a.streamMap, k)

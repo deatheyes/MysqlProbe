@@ -237,7 +237,7 @@ func (c *Collector) assembleMessage(target *message.Report, slice *message.Messa
 	slow := (slice.Latency / 1000) > c.slowThreshold
 	target.AddMessage(slice, slow)
 	// caculate qps
-	key := slice.SQL
+	key := slice.HashKey()
 	c.qps.Add(key, 1)
 	// caculate latency us
 	c.latency.Add(key, slice.Latency)

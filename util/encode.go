@@ -1,7 +1,7 @@
 package util
 
 import (
-	"hash/fnv"
+	"hash/crc32"
 )
 
 // ReadLengthEncodedInteger is a length decoder
@@ -43,7 +43,5 @@ func ReadStatus(b []byte) uint16 {
 
 // Hash return the hash code of a string
 func Hash(key string) uint32 {
-	h := fnv.New32a()
-	h.Write([]byte(key))
-	return h.Sum32()
+	return crc32.ChecksumIEEE([]byte(key))
 }
