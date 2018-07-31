@@ -228,11 +228,6 @@ func (c *Collector) assembleReport(target, slice *message.Report) {
 	glog.V(8).Info("[collector] merge report")
 	// merge report
 	target.Merge(slice)
-	// caculate qps
-	for k, v := range slice.Overview {
-		c.qps.Add(k, int64(v.Summary.SuccessCount+v.Summary.FailedCount))
-		c.latency.Add(k, int64(v.Summary.SuccCostUsTotal+v.Summary.FailedCostUsTotal))
-	}
 }
 
 // merge collected messages, used by slave
@@ -282,26 +277,33 @@ func (c *Collector) Run() {
 		case <-ticker.C:
 			glog.V(7).Info("collector flush report")
 			// report and flush merged data
-			if len(report.Overview) > 0 {
-				// merge summary info
-				for k, v := range report.Overview {
-					v.QPS = c.qps.AverageInSecond(k)
-					sum := c.qps.Sum(k)
-					if sum != 0 {
-						v.AverageLatency = c.latency.Sum(k) / sum
+			if c.disableConnection {
+				// slave need to caculate the average values
+				for _, server := range report.Servers {
+					for k, v := range server.Overview {
+						v.QPS = c.qps.AverageInSecond(k)
+						sum := c.qps.Sum(k)
+						if sum != 0 {
+							v.Latency = c.latency.Sum(k) / sum
+						}
 					}
 				}
+			}
+
+			// report
+			if len(report.Servers) > 0 {
 				if data, err := message.EncodeReportToBytes(report); err != nil {
-					glog.Warningf("encode report failed: %v", err)
+					glog.Warningf("[collector] encode report failed: %v", err)
 				} else {
-					glog.V(8).Info("collector send report")
+					glog.V(8).Info("[collector] send report %v", data)
 					c.report <- data
 				}
 				report = message.NewReport()
 			}
+
 			// see if need to refresh the ticker
 			if c.configChanged {
-				glog.V(7).Infof("ticker update: %v", c.reportPeriod)
+				glog.V(7).Infof("[collector] ticker update: %v", c.reportPeriod)
 				ticker.Stop()
 				ticker = time.NewTicker(c.reportPeriod)
 				c.configChanged = false

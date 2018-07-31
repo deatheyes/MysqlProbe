@@ -46,16 +46,17 @@ func (m *Message) HashKey() string {
 	return m.SQL
 }
 
-// Summary is a collection of counters
+// Summary is a collection of counters and recoreds
 type Summary struct {
-	SuccessCount      int       `json:"success"`                   // success query number
-	FailedCount       int       `json:"failed"`                    // failed query number
-	LastSeen          time.Time `json:"last_seen"`                 // the latest timestamp
-	SuccCostUsTotal   int64     `json:"success_total_cost"`        // total cost of success query, we don't caculate average info for the sake of performence
-	FailedCostUsTotal int64     `json:"failed_total_cost"`         // total cost of failed query, we don't caculate average info for the sake of performence
-	NoGoodIndexUsed   int64     `json:"status_no_good_index_used"` // count of SERVER_STATUS_NO_GOOD_INDEX_USED
-	NoIndexUsed       int64     `json:"status_no_index_used"`      // count of SERVER_STATUS_NO_INDEX_USED
-	QueryWasSlow      int64     `json:"status_query_was_slow"`     // count of SERVER_QUERY_WAS_SLOW
+	SuccessCount      int        `json:"success"`                   // success query number
+	FailedCount       int        `json:"failed"`                    // failed query number
+	LastSeen          time.Time  `json:"last_seen"`                 // the latest timestamp
+	SuccCostUsTotal   int64      `json:"success_total_cost"`        // total cost of success query, we don't caculate average info for the sake of performence
+	FailedCostUsTotal int64      `json:"failed_total_cost"`         // total cost of failed query, we don't caculate average info for the sake of performence
+	NoGoodIndexUsed   int64      `json:"status_no_good_index_used"` // count of SERVER_STATUS_NO_GOOD_INDEX_USED
+	NoIndexUsed       int64      `json:"status_no_index_used"`      // count of SERVER_STATUS_NO_INDEX_USED
+	QueryWasSlow      int64      `json:"status_query_was_slow"`     // count of SERVER_QUERY_WAS_SLOW
+	Slow              []*Message `json:"slow"`                      // slow querys
 }
 
 // Merge another summary into this one
@@ -74,11 +75,13 @@ func (s *Summary) Merge(as *Summary) bool {
 	s.NoIndexUsed += as.NoIndexUsed
 	s.NoGoodIndexUsed += as.NoGoodIndexUsed
 	s.QueryWasSlow += as.QueryWasSlow
+
+	s.Slow = append(s.Slow, as.Slow[:]...)
 	return true
 }
 
 // AddMessage asseble a Message to this summary
-func (s *Summary) AddMessage(m *Message) bool {
+func (s *Summary) AddMessage(m *Message, slow bool) bool {
 	if m == nil {
 		return false
 	}
@@ -104,34 +107,8 @@ func (s *Summary) AddMessage(m *Message) bool {
 	if m.ServerStatus&ServerQueryWasSlow != 0 {
 		s.QueryWasSlow++
 	}
-	return true
-}
-
-// GlobalSummary extend Summary with average values and query samples
-type GlobalSummary struct {
-	Summary        *Summary   `json:"summary"`     // counters
-	QPS            int64      `json:"qps"`         // current qps
-	AverageLatency int64      `json:"avg_latency"` // average latency
-	SQL            string     `json:"sql"`         // sql template
-	Slow           []*Message `json:"slow"`        // slow querys
-}
-
-// Merge another summary into this one
-func (s *GlobalSummary) Merge(as *GlobalSummary) bool {
-	if !s.Summary.Merge(as.Summary) {
-		return false
-	}
-	s.Slow = append(s.Slow, as.Slow[:]...)
-	return true
-}
-
-// AddMessage merge a Message into this summary
-func (s *GlobalSummary) AddMessage(m *Message, reserve bool) bool {
-	if !s.Summary.AddMessage(m) {
-		return false
-	}
-
-	if reserve {
+	// slow query
+	if slow {
 		s.Slow = append(s.Slow, m)
 	}
 	return true
@@ -165,7 +142,7 @@ func (s *ClientSummary) Merge(as *ClientSummary) bool {
 }
 
 // AddMessage merge a Message into this summary
-func (s *ClientSummary) AddMessage(m *Message) bool {
+func (s *ClientSummary) AddMessage(m *Message, slow bool) bool {
 	if m == nil {
 		return false
 	}
@@ -175,24 +152,70 @@ func (s *ClientSummary) AddMessage(m *Message) bool {
 		v = &Summary{}
 		s.Summary[m.SQL] = v
 	}
-	return v.AddMessage(m)
+	return v.AddMessage(m, slow)
+}
+
+// SQLSummary extends Summary with average values, sunch as QPS and Latency
+type SQLSummary struct {
+	QPS     int64    `json:"qps"`     // current qps
+	Latency int64    `json:"latency"` // average latency
+	Summary *Summary `json:"summary"`
+}
+
+// Merge another summary into this one
+func (s *SQLSummary) Merge(as *SQLSummary) bool {
+	if as == nil {
+		return false
+	}
+
+	qps := s.QPS + as.QPS
+	if qps != 0 {
+		s.Latency = (s.Latency*s.QPS + as.Latency*as.QPS) / (s.QPS + as.QPS)
+		s.QPS = qps
+	} else {
+		s.QPS = 0
+		s.Latency = 0
+	}
+
+	return s.Summary.Merge(as.Summary)
+}
+
+// AddMessage merge a Message into this summary
+func (s *SQLSummary) AddMessage(m *Message) bool {
+	if m == nil {
+		return false
+	}
+	return s.Summary.AddMessage(m, false)
 }
 
 // ServerSummary group client summary by server ip
 type ServerSummary struct {
-	Clients map[string]*ClientSummary `json:"clients"` // client summary group
+	Overview  map[string]*SQLSummary    `json:"overview"`  // overview
+	Timestamp time.Time                 `json:"timestamp"` // timestamp for this summary
+	IP        string                    `json:"ip"`        // server ip
+	Clients   map[string]*ClientSummary `json:"clients"`   // client summary group
 }
 
 func newServerSummary(ip string) *ServerSummary {
 	return &ServerSummary{
-		Clients: make(map[string]*ClientSummary),
+		Clients:   make(map[string]*ClientSummary),
+		IP:        ip,
+		Timestamp: time.Now(),
 	}
 }
 
 // Merge another summary into this one
 func (s *ServerSummary) Merge(as *ServerSummary) bool {
-	if as == nil {
+	if as == nil || s.IP != as.IP {
 		return false
+	}
+
+	for k, v := range as.Overview {
+		if s.Overview[k] != nil {
+			s.Overview[k].Merge(v)
+		} else {
+			s.Overview[k] = v
+		}
 	}
 
 	for k, v := range as.Clients {
@@ -202,35 +225,40 @@ func (s *ServerSummary) Merge(as *ServerSummary) bool {
 			s.Clients[k] = v
 		}
 	}
+	s.Timestamp = time.Now()
 	return true
 }
 
 // AddMessage merge a Message into this summary
-func (s *ServerSummary) AddMessage(m *Message) bool {
+func (s *ServerSummary) AddMessage(m *Message, slow bool) bool {
 	if m == nil {
 		return false
 	}
+
+	if s.Overview[m.SQL] == nil {
+		s.Overview[m.SQL] = &SQLSummary{}
+	}
+	s.Overview[m.SQL].AddMessage(m)
 
 	c := s.Clients[m.ClientIP]
 	if c == nil {
 		c = newClientSummary()
 		s.Clients[m.ClientIP] = c
 	}
-	c.AddMessage(m)
-	return true
+	return c.AddMessage(m, slow)
 }
 
 // Report group captured info by server
 type Report struct {
-	Overview map[string]*GlobalSummary `json:"overview"` // overview summary group
-	Servers  map[string]*ServerSummary `json:"servers"`  // server summary group
+	// Overview map[string]*GlobalSummary `json:"overview"` // overview summary group
+	Servers map[string]*ServerSummary `json:"servers"` // server summary group
 }
 
 // NewReport create a Report object
 func NewReport() *Report {
 	return &Report{
-		Overview: make(map[string]*GlobalSummary),
-		Servers:  make(map[string]*ServerSummary),
+		// Overview: make(map[string]*GlobalSummary),
+		Servers: make(map[string]*ServerSummary),
 	}
 }
 
@@ -238,14 +266,6 @@ func NewReport() *Report {
 func (r *Report) Merge(ar *Report) {
 	if r == nil {
 		return
-	}
-
-	for k, v := range ar.Overview {
-		if r.Overview[k] != nil {
-			r.Overview[k].Merge(v)
-		} else {
-			r.Overview[k] = v
-		}
 	}
 
 	for k, v := range ar.Servers {
@@ -268,14 +288,7 @@ func (r *Report) AddMessage(m *Message, slow bool) bool {
 		s = newServerSummary(m.ServerIP)
 		r.Servers[m.ServerIP] = s
 	}
-	s.AddMessage(m)
-
-	o := r.Overview[m.SQL]
-	if o == nil {
-		o = &GlobalSummary{Summary: &Summary{}}
-		r.Overview[m.SQL] = o
-	}
-	return o.AddMessage(m, slow)
+	return s.AddMessage(m, slow)
 }
 
 // DecodeReportFromBytes unmarshal bytes to a Report
