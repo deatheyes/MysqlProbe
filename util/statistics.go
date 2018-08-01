@@ -2,6 +2,8 @@ package util
 
 import (
 	"errors"
+	"math"
+	"sync"
 	"time"
 )
 
@@ -145,4 +147,73 @@ func (n *RollingNumber) Sum(key string) int64 {
 // AverageInSecond caculate the average of the item specified by key in second
 func (n *RollingNumber) AverageInSecond(key string) int64 {
 	return n.Sum(key) * 1000 / n.timeInMilliseconds
+}
+
+type rangeRing struct {
+	list     []int64   // value ring
+	min      int64     // min value
+	max      int64     // max value
+	pos      int       // next pos
+	size     int       // ring size mirror from RollingRange
+	lastseen time.Time // lastupdate time
+}
+
+func newRangeRing(size int) *rangeRing {
+	return &rangeRing{
+		list: make([]int64, size),
+		min:  math.MaxInt64,
+		max:  0,
+		pos:  0,
+	}
+}
+
+func (r *rangeRing) add(value int64) {
+	r.list[r.pos] = value
+	r.pos = (r.pos + 1) % r.size
+}
+
+// RollingRange track the range info in time
+type RollingRange struct {
+	size       int                   // ring size
+	rings      map[string]*rangeRing // value ring
+	expiration time.Duration         // key expiration time
+	sync.RWMutex
+}
+
+// NewRollingRange create a RollingRange object
+func NewRollingRange(size int, expiration time.Duration) *RollingRange {
+	r := &RollingRange{
+		size:       size,
+		rings:      make(map[string]*rangeRing),
+		expiration: expiration,
+	}
+	go r.run()
+	return r
+}
+
+const interval = time.Second
+
+func (r *RollingRange) run() {
+	ticker := time.NewTicker(interval)
+	for {
+		<-ticker.C
+		for k, v := range r.rings {
+			if time.Now().Sub(v.lastseen) > r.expiration {
+				r.Lock()
+				delete(r.rings, k)
+				r.Unlock()
+			}
+		}
+	}
+}
+
+// Add add the value to a ring specified by the key
+func (r *RollingRange) Add(key string, value int64) {
+	r.RLock()
+	defer r.RUnlock()
+
+	if _, ok := r.rings[key]; !ok {
+		r.rings[key] = newRangeRing(r.size)
+	}
+	r.rings[key].add(value)
 }

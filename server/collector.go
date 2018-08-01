@@ -237,7 +237,7 @@ func (c *Collector) assembleMessage(target *message.Report, slice *message.Messa
 	slow := (slice.Latency / 1000) > c.slowThreshold
 	target.AddMessage(slice, slow)
 	// caculate qps
-	key := slice.SummaryHashKey()
+	key := slice.AssemblyKey
 	c.qps.Add(key, 1)
 	// caculate latency us
 	c.latency.Add(key, slice.Latency)
@@ -279,21 +279,21 @@ func (c *Collector) Run() {
 			// report and flush merged data
 			if c.disableConnection {
 				// slave need to caculate the average values
-				for _, server := range report.Servers {
-					for _, v := range server.Overview {
-						for _, n := range v.Groups {
-							n.QPS = c.qps.AverageInSecond(n.Key)
-							sum := c.qps.Sum(n.Key)
-							if sum != 0 {
-								n.Latency = c.latency.Sum(n.Key) / sum
-							}
+				for _, db := range report.DB {
+					for _, s := range db.Group.Summary {
+						s.QPS = new(int)
+						*s.QPS = int(c.qps.AverageInSecond(s.AssemblyKey))
+						sum := c.qps.Sum(s.AssemblyKey)
+						if sum != 0 {
+							s.AverageLatency = new(int)
+							*s.AverageLatency = int(c.latency.Sum(s.Key) / sum)
 						}
 					}
 				}
 			}
 
 			// report
-			if len(report.Servers) > 0 {
+			if len(report.DB) > 0 {
 				if data, err := message.EncodeReportToBytes(report); err != nil {
 					glog.Warningf("[collector] encode report failed: %v", err)
 				} else {

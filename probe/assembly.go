@@ -194,6 +194,7 @@ func (s *MysqlStream) run() {
 					} else {
 						msg.DB = unknowDbName
 					}
+					msg.AssemblyKey = msg.AssemblyHashKey()
 
 					glog.V(6).Infof("[%v] mysql query parsed done: %v", s.name, msg.SQL)
 

@@ -3,7 +3,6 @@ package message
 import (
 	"encoding/json"
 	"strconv"
-	"time"
 
 	"github.com/deatheyes/MysqlProbe/util"
 )
@@ -43,6 +42,7 @@ type Message struct {
 	ServerPort   uint16 `json:"m"` // server port
 	ClientIP     string `json:"n"` // client ip
 	ClientPort   uint16 `json:"o"` // client port
+	AssemblyKey  string `json:"p"` // hash key for assembly
 }
 
 // HashKey hash(sql) for map
@@ -50,57 +50,35 @@ func (m *Message) HashKey() string {
 	return strconv.FormatInt(int64(util.Hash(m.SQL)), 10)
 }
 
-// SummaryHashKey hash(sql+db) for map, same as Summary.HashKey()
+// AssemblyHashKey hash(db+ip+sql) for map, same as AssembleHashKey()
+func (m *Message) AssemblyHashKey() string {
+	return strconv.FormatInt(int64(util.Hash(m.DB+m.ServerIP+m.SQL)), 10)
+}
+
+// SummaryHashKey is the hash key of the corresponding AssemblySummary
 func (m *Message) SummaryHashKey() string {
-	return strconv.FormatInt(int64(util.Hash(m.SQL+m.DB)), 10)
+	return m.DB + "|" + m.ServerIP
 }
 
 // Summary is a collection of counters and recoreds
 type Summary struct {
-	SQL               string     `json:"a"` // SQL template
-	DB                string     `json:"b"` // DB name
-	SuccessCount      int        `json:"c"` // success query number
-	FailedCount       int        `json:"d"` // failed query number
-	LastSeen          int64      `json:"e"` // the latest timestamp
-	SuccCostUsTotal   int64      `json:"f"` // total cost of success query, we don't caculate average info for the sake of performence
-	FailedCostUsTotal int64      `json:"g"` // total cost of failed query, we don't caculate average info for the sake of performence
-	NoGoodIndexUsed   int64      `json:"h"` // count of SERVER_STATUS_NO_GOOD_INDEX_USED
-	NoIndexUsed       int64      `json:"i"` // count of SERVER_STATUS_NO_INDEX_USED
-	QueryWasSlow      int64      `json:"j"` // count of SERVER_QUERY_WAS_SLOW
-	Slow              []*Message `json:"k"` // slow querys
-	QPS               int64      `json:"l"` // current qps
-	Latency           int64      `json:"m"` // average latency
-	Key               string     `json:"n"` // hash key for speeding up
-}
-
-// Merge another summary into this one
-func (s *Summary) Merge(as *Summary) bool {
-	if as == nil {
-		return false
-	}
-
-	s.SuccessCount += as.SuccessCount
-	s.FailedCount += as.FailedCount
-	if s.LastSeen < as.LastSeen {
-		s.LastSeen = as.LastSeen
-	}
-	s.SuccCostUsTotal += as.SuccCostUsTotal
-	s.FailedCostUsTotal += as.FailedCostUsTotal
-	s.NoIndexUsed += as.NoIndexUsed
-	s.NoGoodIndexUsed += as.NoGoodIndexUsed
-	s.QueryWasSlow += as.QueryWasSlow
-
-	s.Slow = append(s.Slow, as.Slow[:]...)
-
-	qps := s.QPS + as.QPS
-	if qps != 0 {
-		s.Latency = (s.Latency*s.QPS + as.Latency*as.QPS) / (s.QPS + as.QPS)
-		s.QPS = qps
-	} else {
-		s.QPS = 0
-		s.Latency = 0
-	}
-	return true
+	Key               string     `json:"a"`           // hash key of SQL
+	SQL               string     `json:"b"`           // SQL template
+	SuccessCount      int        `json:"c"`           // success query number
+	FailedCount       int        `json:"d"`           // failed query number
+	LastSeen          int64      `json:"e"`           // the latest timestamp
+	SuccCostUsTotal   int64      `json:"f"`           // total cost of success query, we don't caculate average info for the sake of performence
+	FailedCostUsTotal int64      `json:"g"`           // total cost of failed query, we don't caculate average info for the sake of performence
+	NoGoodIndexUsed   int64      `json:"h"`           // count of SERVER_STATUS_NO_GOOD_INDEX_USED
+	NoIndexUsed       int64      `json:"i"`           // count of SERVER_STATUS_NO_INDEX_USED
+	QueryWasSlow      int64      `json:"j"`           // count of SERVER_QUERY_WAS_SLOW
+	QPS               *int       `json:"k,omitempty"` // qps
+	AverageLatency    *int       `json:"l,omitempty"` // average latency
+	MinLatency        *int       `json:"m,omitempty"` // min latency
+	MaxLatency        *int       `json:"n,omitempty"` // max latency
+	Latency99         *int       `json:"o,omitempty"` // 99% latency
+	Slow              []*Message `json:"p,omitempty"` // slow queries
+	AssemblyKey       string     `json:"q,omitempty"` // hash key for assembly
 }
 
 // AddMessage asseble a Message to this summary
@@ -108,11 +86,11 @@ func (s *Summary) AddMessage(m *Message, slow bool) bool {
 	if m == nil {
 		return false
 	}
-	s.SQL = m.SQL
-	s.DB = m.DB
 	// init hash key for speed up
 	if len(s.Key) == 0 {
-		s.Key = m.SummaryHashKey()
+		s.Key = m.HashKey()
+		s.SQL = m.SQL
+		s.AssemblyKey = m.AssemblyKey
 	}
 
 	if m.Err {
@@ -143,35 +121,27 @@ func (s *Summary) AddMessage(m *Message, slow bool) bool {
 	return true
 }
 
-// ClientSummary extend Summary with client ip
-type ClientSummary struct {
-	Summary map[string]*DBSummary `json:"a"` // counters
+// SummaryGroup groups summary by sql
+type SummaryGroup struct {
+	Summary map[string]*Summary
 }
 
-func newClientSummary() *ClientSummary {
-	return &ClientSummary{
-		Summary: make(map[string]*DBSummary),
-	}
+func newSummaryGroup() *SummaryGroup {
+	return &SummaryGroup{Summary: make(map[string]*Summary)}
 }
 
-// Merge another summary into this one
-func (s *ClientSummary) Merge(as *ClientSummary) bool {
-	if as == nil {
-		return false
-	}
-
-	for k, v := range as.Summary {
-		if s.Summary[k] != nil {
-			s.Summary[k].Merge(v)
-		} else {
-			s.Summary[k] = v
-		}
-	}
-	return true
+// MarshalJSON interface
+func (s *SummaryGroup) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.Summary)
 }
 
-// AddMessage merge a Message into this summary
-func (s *ClientSummary) AddMessage(m *Message, slow bool) bool {
+// UnmarshalJSON interface
+func (s *SummaryGroup) UnmarshalJSON(b []byte) error {
+	return json.Unmarshal(b, &s.Summary)
+}
+
+// AddMessage asseble a Message to this summary
+func (s *SummaryGroup) AddMessage(m *Message, slow bool) bool {
 	if m == nil {
 		return false
 	}
@@ -179,124 +149,76 @@ func (s *ClientSummary) AddMessage(m *Message, slow bool) bool {
 	key := m.HashKey()
 	v := s.Summary[key]
 	if v == nil {
-		v = newDBSummary()
+		v = &Summary{}
 		s.Summary[key] = v
 	}
 	return v.AddMessage(m, slow)
 }
 
-// DBSummary group summary by dbname
-type DBSummary struct {
-	Groups map[string]*Summary `json:"a"`
+// AssemblySummary group Summary by db and server ip
+type AssemblySummary struct {
+	DB     string                   `json:"a"` // DB name
+	IP     string                   `json:"b"` // server ip
+	Group  *SummaryGroup            `json:"c"` // summary group by query
+	Client map[string]*SummaryGroup `json:"d"` // summary group by client
 }
 
-func newDBSummary() *DBSummary {
-	return &DBSummary{Groups: make(map[string]*Summary)}
-}
-
-// Merge another summary into this one
-func (s *DBSummary) Merge(as *DBSummary) bool {
-	if as == nil {
-		return false
+func newAssemblySummary() *AssemblySummary {
+	return &AssemblySummary{
+		Group:  newSummaryGroup(),
+		Client: make(map[string]*SummaryGroup),
 	}
-
-	for k, v := range as.Groups {
-		if s.Groups[k] != nil {
-			s.Groups[k].Merge(v)
-		} else {
-			s.Groups[k] = v
-		}
-	}
-	return true
 }
 
-// AddMessage merge a Message into this summary
-func (s *DBSummary) AddMessage(m *Message, slow bool) bool {
+// HashKey for mapping
+func (s *AssemblySummary) HashKey() string {
+	return s.DB + "|" + s.IP
+}
+
+// AddMessage asseble a Message to this summary
+func (s *AssemblySummary) AddMessage(m *Message, slow bool) bool {
 	if m == nil {
 		return false
 	}
 
-	key := m.HashKey()
-	g := s.Groups[key]
-	if g == nil {
-		g = &Summary{}
-		s.Groups[key] = g
-	}
-	return g.AddMessage(m, slow)
-}
-
-// ServerSummary group client summary by server ip
-type ServerSummary struct {
-	Overview  map[string]*DBSummary     `json:"a"` // overview
-	Timestamp int64                     `json:"b"` // timestamp for this summary
-	Clients   map[string]*ClientSummary `json:"c"` // client summary group
-}
-
-func newServerSummary(ip string) *ServerSummary {
-	return &ServerSummary{
-		Overview:  make(map[string]*DBSummary),
-		Clients:   make(map[string]*ClientSummary),
-		Timestamp: time.Now().UnixNano(),
-	}
-}
-
-// Merge another summary into this one
-func (s *ServerSummary) Merge(as *ServerSummary) bool {
-	if as == nil {
-		return false
+	if len(s.IP) == 0 {
+		s.DB = m.DB
+		s.IP = m.ServerIP
 	}
 
-	for k, v := range as.Overview {
-		if s.Overview[k] != nil {
-			s.Overview[k].Merge(v)
-		} else {
-			s.Overview[k] = v
-		}
-	}
+	s.Group.AddMessage(m, false)
 
-	for k, v := range as.Clients {
-		if s.Clients[k] != nil {
-			s.Clients[k].Merge(v)
-		} else {
-			s.Clients[k] = v
-		}
+	key := m.ClientIP
+	v := s.Client[key]
+	if v == nil {
+		v = newSummaryGroup()
+		s.Client[key] = v
 	}
-	s.Timestamp = time.Now().UnixNano()
+	v.AddMessage(m, slow)
+
 	return true
 }
 
-// AddMessage merge a Message into this summary
-func (s *ServerSummary) AddMessage(m *Message, slow bool) bool {
-	if m == nil {
-		return false
-	}
-
-	key := m.DB
-	if s.Overview[key] == nil {
-		s.Overview[key] = newDBSummary()
-	}
-	s.Overview[key].AddMessage(m, false)
-
-	c := s.Clients[m.ClientIP]
-	if c == nil {
-		c = newClientSummary()
-		s.Clients[m.ClientIP] = c
-	}
-	return c.AddMessage(m, slow)
-}
-
-// Report group captured info by server
+// Report group captured info by DB
 type Report struct {
-	// Overview map[string]*GlobalSummary `json:"overview"` // overview summary group
-	Servers map[string]*ServerSummary `json:"a"` // server summary group
+	DB map[string]*AssemblySummary
 }
 
 // NewReport create a Report object
 func NewReport() *Report {
 	return &Report{
-		// Overview: make(map[string]*GlobalSummary),
-		Servers: make(map[string]*ServerSummary),
+		DB: make(map[string]*AssemblySummary),
 	}
+}
+
+// MarshalJSON interface
+func (r *Report) MarshalJSON() ([]byte, error) {
+	return json.Marshal(r.DB)
+}
+
+// UnmarshalJSON interface
+func (r *Report) UnmarshalJSON(b []byte) error {
+	return json.Unmarshal(b, &r.DB)
 }
 
 // Merge assemble another Report to this one
@@ -305,12 +227,9 @@ func (r *Report) Merge(ar *Report) {
 		return
 	}
 
-	for k, v := range ar.Servers {
-		if r.Servers[k] != nil {
-			r.Servers[k].Merge(v)
-		} else {
-			r.Servers[k] = v
-		}
+	// data error if there is a override
+	for k, v := range ar.DB {
+		r.DB[k] = v
 	}
 }
 
@@ -320,12 +239,12 @@ func (r *Report) AddMessage(m *Message, slow bool) bool {
 		return false
 	}
 
-	s := r.Servers[m.ServerIP]
-	if s == nil {
-		s = newServerSummary(m.ServerIP)
-		r.Servers[m.ServerIP] = s
+	d := r.DB[m.DB]
+	if d == nil {
+		d = newAssemblySummary()
+		r.DB[m.DB] = d
 	}
-	return s.AddMessage(m, slow)
+	return d.AddMessage(m, slow)
 }
 
 // DecodeReportFromBytes unmarshal bytes to a Report
