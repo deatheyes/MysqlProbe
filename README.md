@@ -63,15 +63,52 @@ The configuration is a yaml file:
 	  snappylength: 0  # snappy buffer length of the probe, slave only
 	  workers: 2       # number of workers to process probe data, slave only
 	pusher:
-	  servers: "127.0.0.1:8668,127.0.0.1:8669" # server list splited by ','. pusher will select one server to push data
-	  path: "websocket"                        # websocket path
-	  preconnect: true                         # create connection to all servers
+	  servers: 127.0.0.1:8668,127.0.0.1:8669 # server list splited by ','. pusher will select one server to push data
+	  path: websocket                        # websocket path
+	  preconnect: true                       # create connection to all servers
 	watcher: # watcher is responsible for cache and refresh map of dbname and connection
-	  uname: test    # user name for login mysql
-	  passward: test # passward to login mysql
-	  address: test  # mysql address
-	  dbname: test   # dbname to login mysql
-	  
+	  uname: test                # user name for login mysql
+	  passward: test             # passward to login mysql
+	  socket: /tmp/mysql.scoket  # mysql address
+	  dbname: test               # dbname to login mysql
+
+### Global Configuration
+
+* slave: Decide the node's role.
+* serverport: Websocket address the node. Data will be pushed into any clients connected.
+* interval: Data pushing interval.
+* slowthresholdms: threshold for data collector to record detial query infomation(**message.Message**).
+
+### Cluster Configuration
+
+This is an optional configuration. By default, gossip will be utilized. If you don't associated the nodes with each other, you can build your own cluster above those standalone slaves.
+
+* gossip: Cluster mode gossip|static
+* group: Lable to distinguish nodes belong to different cluster.
+* port: gossip bind port. Specially, '0' indicates a ramdom port.
+
+### Probe Configuration
+
+Most of configurations of this section ralate to the libpcap. Only slave node will create a probe. Obviously, slave must be deployed at the some machine with Mysql.
+
+* device: One or multiple interfaces to probe, splited by ','.
+* port: Mysql port to probe. Single port supported currently.
+* snappylength: snappy buffer length of the probe. It is suggested to be set to 0 or left aside if you don't know how your system supports this argument. See **Note** for more information.
+* workers: Number of workers to process probe data. Probe dispatchs packet to workers by connections.
+
+### Pusher
+
+Compared with the websocket server in **Global Configuation**, **Pusher** is a websocket client to push data to one of the servers actively. And it is a optional configuration. Pusher is usefull in building your own cluster. Targets of the pusher could be your proxy to prepare the data for your storage or dashboard.
+
+* servers: Server list to push data.
+* path: Url path.
+* preconnect: Create connection to all the servers ahead or not.
+
+### Watcher
+
+Watcher is one of the module responsible for building map from connection to db. It needs Mysql authority to run 'show processlist'.
+
+* sock: Mysql unix domain sock path.
 
 ## Output
 Data collected from slave or master will be reported in form of json. The report contains statistical items:

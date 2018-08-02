@@ -21,10 +21,10 @@ const (
 
 // ConnectionWatcher get the connection info by db client and refresh periodically
 type ConnectionWatcher struct {
-	infoMap    map[string]*DBConnectionInfo // connection info from db.
+	infoMap    map[string]*DBConnectionInfo // connection info from db
 	uname      string                       // db user name
 	passward   string                       // db passward
-	address    string                       // db address
+	sock       string                       // db domain socket path
 	dbname     string                       // db name
 	lastupdate time.Time                    // update time
 	lastbytes  []byte                       // byte for comparision
@@ -32,12 +32,12 @@ type ConnectionWatcher struct {
 }
 
 // NewConnectionWatcher create a instance of connection watcher
-func NewConnectionWatcher(uname, passward, address, dbname string) *ConnectionWatcher {
+func NewConnectionWatcher(uname, passward, sock, dbname string) *ConnectionWatcher {
 	w := &ConnectionWatcher{
 		infoMap:  make(map[string]*DBConnectionInfo),
 		uname:    uname,
 		passward: passward,
-		address:  address,
+		sock:     sock,
 		dbname:   dbname,
 	}
 	w.init()
@@ -45,7 +45,7 @@ func NewConnectionWatcher(uname, passward, address, dbname string) *ConnectionWa
 }
 
 func (w *ConnectionWatcher) update() {
-	m, err := GetMysqlConnectionInfo(w.uname, w.passward, w.address, w.dbname)
+	m, err := GetMysqlConnectionInfo(w.uname, w.passward, w.sock, w.dbname)
 	if err != nil {
 		glog.Warningf("[watcher] get connection info failed: %v", err)
 	}
@@ -107,8 +107,8 @@ func (i *DBConnectionInfo) key() (buffer []byte) {
 }
 
 // GetMysqlConnectionInfo return all db connection info
-func GetMysqlConnectionInfo(user string, password string, address string, dbname string) (map[string]*DBConnectionInfo, error) {
-	str := fmt.Sprintf("%s:%s@tcp(%s)/%s", user, password, address, dbname)
+func GetMysqlConnectionInfo(user string, password string, sock string, dbname string) (map[string]*DBConnectionInfo, error) {
+	str := fmt.Sprintf("%s:%s@unix(%s)/%s", user, password, sock, dbname)
 	db, err := sql.Open(mysql, str)
 	if err != nil {
 		return nil, err

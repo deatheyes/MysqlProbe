@@ -48,7 +48,7 @@ type Pusher struct {
 type ConnectionWatcher struct {
 	Uname    string `yaml:"uname"`
 	Password string `yaml:"password"`
-	Address  string `yaml:"address"`
+	Sock     string `yaml:"sock"`
 	DBname   string `yaml:"dbname"`
 }
 
