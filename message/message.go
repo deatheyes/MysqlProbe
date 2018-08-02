@@ -132,12 +132,25 @@ func newSummaryGroup() *SummaryGroup {
 
 // MarshalJSON interface
 func (s *SummaryGroup) MarshalJSON() ([]byte, error) {
-	return json.Marshal(s.Summary)
+	var list []*Summary
+	for _, v := range s.Summary {
+		list = append(list, v)
+	}
+	return json.Marshal(list)
 }
 
 // UnmarshalJSON interface
 func (s *SummaryGroup) UnmarshalJSON(b []byte) error {
-	return json.Unmarshal(b, &s.Summary)
+	var list []*Summary
+	if err := json.Unmarshal(b, list); err != nil {
+		return err
+	}
+
+	s.Summary = make(map[string]*Summary)
+	for _, v := range list {
+		s.Summary[v.Key] = v
+	}
+	return nil
 }
 
 // AddMessage asseble a Message to this summary
@@ -155,18 +168,77 @@ func (s *SummaryGroup) AddMessage(m *Message, slow bool) bool {
 	return v.AddMessage(m, slow)
 }
 
+// ClientSummaryUnit flattens the ClientSummaryGroup
+type ClientSummaryUnit struct {
+	IP    string        `json:"a"`
+	Group *SummaryGroup `json:"b"`
+}
+
+// ClientSummaryGroup is a wrapper of map[string]*SummaryGroup
+type ClientSummaryGroup struct {
+	ClientGroup map[string]*SummaryGroup
+}
+
+func newClientSummaryGroup() *ClientSummaryGroup {
+	return &ClientSummaryGroup{
+		ClientGroup: make(map[string]*SummaryGroup),
+	}
+}
+
+// MarshalJSON interface
+func (g *ClientSummaryGroup) MarshalJSON() ([]byte, error) {
+	var list []*ClientSummaryUnit
+	for k, v := range g.ClientGroup {
+		list = append(list, &ClientSummaryUnit{IP: k, Group: v})
+	}
+	return json.Marshal(list)
+}
+
+// UnmarshalJSON interface
+func (g *ClientSummaryGroup) UnmarshalJSON(b []byte) error {
+	var list []*ClientSummaryUnit
+	if err := json.Unmarshal(b, list); err != nil {
+		return err
+	}
+
+	g.ClientGroup = make(map[string]*SummaryGroup)
+	for _, v := range list {
+		if len(v.Group.Summary) == 0 {
+			continue
+		}
+		g.ClientGroup[v.IP] = v.Group
+	}
+	return nil
+}
+
+// AddMessage asseble a Message to this summary
+func (g *ClientSummaryGroup) AddMessage(m *Message, slow bool) bool {
+	if m == nil {
+		return false
+	}
+
+	key := m.ClientIP
+	v := g.ClientGroup[key]
+	if v == nil {
+		v = newSummaryGroup()
+		g.ClientGroup[key] = v
+	}
+	return v.AddMessage(m, slow)
+}
+
 // AssemblySummary group Summary by db and server ip
 type AssemblySummary struct {
-	DB     string                   `json:"a"` // DB name
-	IP     string                   `json:"b"` // server ip
-	Group  *SummaryGroup            `json:"c"` // summary group by query
-	Client map[string]*SummaryGroup `json:"d"` // summary group by client
+	DB       string              `json:"a"` // DB name
+	IP       string              `json:"b"` // server ip
+	LastSeen int64               `json:"c"` // timestamp
+	Group    *SummaryGroup       `json:"d"` // summary group by query
+	Client   *ClientSummaryGroup `json:"e"` // summary group by client
 }
 
 func newAssemblySummary() *AssemblySummary {
 	return &AssemblySummary{
 		Group:  newSummaryGroup(),
-		Client: make(map[string]*SummaryGroup),
+		Client: newClientSummaryGroup(),
 	}
 }
 
@@ -186,15 +258,12 @@ func (s *AssemblySummary) AddMessage(m *Message, slow bool) bool {
 		s.IP = m.ServerIP
 	}
 
-	s.Group.AddMessage(m, false)
-
-	key := m.ClientIP
-	v := s.Client[key]
-	if v == nil {
-		v = newSummaryGroup()
-		s.Client[key] = v
+	if s.LastSeen < m.TimestampRsp {
+		s.LastSeen = m.TimestampRsp
 	}
-	v.AddMessage(m, slow)
+
+	s.Group.AddMessage(m, false)
+	s.Client.AddMessage(m, slow)
 
 	return true
 }
