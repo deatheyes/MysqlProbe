@@ -62,6 +62,10 @@ The configuration is a yaml file:
 	  port: 3306       # port to probe, slave only
 	  snappylength: 0  # snappy buffer length of the probe, slave only
 	  workers: 2       # number of workers to process probe data, slave only
+	pusher:
+	  servers: "127.0.0.1:8668,127.0.0.1:8669" # server list splited by ','. pusher will select one server to push data
+	  path: "websocket"                        # websocket path
+	  preconnect: true                         # create connection to all servers
 	watcher: # watcher is responsible for cache and refresh map of dbname and connection
 	  uname: test    # user name for login mysql
 	  passward: test # passward to login mysql
