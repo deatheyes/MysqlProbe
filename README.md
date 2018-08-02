@@ -63,10 +63,10 @@ The configuration is a yaml file:
 	  snappylength: 0  # snappy buffer length of the probe, slave only
 	  workers: 2       # number of workers to process probe data, slave only
 	watcher: # watcher is responsible for cache and refresh map of dbname and connection
-	  uname: test    # dbname for login
-	  passward: test # passward to login
-	  address: test  # db address
-	  dbname: test   # dbname to login
+	  uname: test    # user name for login mysql
+	  passward: test # passward to login mysql
+	  address: test  # mysql address
+	  dbname: test   # dbname to login mysql
 	  
 
 ## Output
