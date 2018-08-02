@@ -3,6 +3,7 @@ package util
 import (
 	"errors"
 	"math"
+	"sort"
 	"sync"
 	"time"
 )
@@ -151,25 +152,63 @@ func (n *RollingNumber) AverageInSecond(key string) int64 {
 
 type rangeRing struct {
 	list     []int64   // value ring
-	min      int64     // min value
-	max      int64     // max value
+	seq      []int     // pos sequence
 	pos      int       // next pos
 	size     int       // ring size mirror from RollingRange
+	pos99    int       // 99 quantile pos
 	lastseen time.Time // lastupdate time
 }
 
 func newRangeRing(size int) *rangeRing {
-	return &rangeRing{
+	r := &rangeRing{
 		list: make([]int64, size),
-		min:  math.MaxInt64,
-		max:  0,
+		seq:  make([]int, size),
 		pos:  0,
+		size: size,
 	}
+	if r.size < 0 {
+		r.size = 1
+	}
+	r.pos99 = int(math.Ceil(float64(r.size)*0.99)) - 1
+	for i := 0; i < r.size; i++ {
+		r.seq[i] = i
+	}
+	return r
+}
+
+func (r *rangeRing) getValueBySeq(seq int) int64 {
+	return r.list[seq]
+}
+
+func (r *rangeRing) Len() int {
+	return r.size
+}
+
+func (r *rangeRing) Less(i, j int) bool {
+	return r.getValueBySeq(r.seq[i]) < r.getValueBySeq(r.seq[j])
+}
+
+func (r *rangeRing) Swap(i, j int) {
+	r.seq[i], r.seq[j] = r.seq[j], r.seq[i]
+}
+
+func (r *rangeRing) min() int64 {
+	return r.getValueBySeq(r.seq[0])
+}
+
+func (r *rangeRing) max() int64 {
+	return r.getValueBySeq(r.seq[r.size-1])
+}
+
+func (r *rangeRing) r99() int64 {
+	return r.getValueBySeq(r.seq[r.pos99])
 }
 
 func (r *rangeRing) add(value int64) {
 	r.list[r.pos] = value
+	sort.Sort(r)
 	r.pos = (r.pos + 1) % r.size
+	r.lastseen = time.Now()
 }
 
 // RollingRange track the range info in time
@@ -212,8 +251,42 @@ func (r *RollingRange) Add(key string, value int64) {
 	r.RLock()
 	defer r.RUnlock()
 
-	if _, ok := r.rings[key]; !ok {
+	if r.rings[key] == nil {
 		r.rings[key] = newRangeRing(r.size)
 	}
 	r.rings[key].add(value)
+}
+
+// Min return the lower boundary of a ring specified by the key
+func (r *RollingRange) Min(key string) int64 {
+	r.RLock()
+	defer r.RUnlock()
+
+	if r.rings[key] == nil {
+		return 0
+	}
+	return r.rings[key].min()
+}
+
+// Max return the uppper boundary of a ring specified by the key
+func (r *RollingRange) Max(key string) int64 {
+	r.RLock()
+	defer r.RUnlock()
+
+	if r.rings[key] == nil {
+		return 0
+	}
+	return r.rings[key].max()
+}
+
+// R99 return the value of 99 quantile
+func (r *RollingRange) R99(key string) int64 {
+	if r.size == 0 {
+		return 0
+	}
+
+	if r.rings[key] == nil {
+		return 0
+	}
+	return r.rings[key].r99()
 }

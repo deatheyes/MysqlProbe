@@ -76,7 +76,7 @@ type Summary struct {
 	AverageLatency    *int       `json:"l,omitempty"` // average latency
 	MinLatency        *int       `json:"m,omitempty"` // min latency
 	MaxLatency        *int       `json:"n,omitempty"` // max latency
-	Latency99         *int       `json:"o,omitempty"` // 99% latency
+	Latency99         *int       `json:"o,omitempty"` // latency of 99 quantile
 	Slow              []*Message `json:"p,omitempty"` // slow queries
 	AssemblyKey       string     `json:"q,omitempty"` // hash key for assembly
 }

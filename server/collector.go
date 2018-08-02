@@ -37,6 +37,7 @@ type Collector struct {
 	configChanged     bool                  // reload flag
 	qps               *util.RollingNumber   // qps caculator
 	latency           *util.RollingNumber   // latency caculator
+	latencyRange      *util.RollingRange    // latency range caculator
 	slowThreshold     int64                 // threshold to record slow querys
 
 	sync.Mutex
@@ -46,6 +47,7 @@ type Collector struct {
 func NewCollector(report chan<- []byte, reportPeriod time.Duration, slowThreshold int64, disableConnection bool) *Collector {
 	qps, _ := util.NewRollingNumber(10000, 100)
 	latency, _ := util.NewRollingNumber(10000, 100)
+	latencyRange := util.NewRollingRange(1000, time.Minute)
 	return &Collector{
 		clients:           make(map[*Client]bool),
 		clientAddrs:       make(map[string]*Client),
@@ -63,6 +65,7 @@ func NewCollector(report chan<- []byte, reportPeriod time.Duration, slowThreshol
 		configChanged:     false,
 		qps:               qps,
 		latency:           latency,
+		latencyRange:      latencyRange,
 		slowThreshold:     slowThreshold,
 	}
 }
@@ -241,6 +244,7 @@ func (c *Collector) assembleMessage(target *message.Report, slice *message.Messa
 	c.qps.Add(key, 1)
 	// caculate latency us
 	c.latency.Add(key, slice.Latency)
+	c.latencyRange.Add(key, slice.Latency)
 }
 
 // Run start the main assembling process on message and report level
@@ -286,8 +290,14 @@ func (c *Collector) Run() {
 						sum := c.qps.Sum(s.AssemblyKey)
 						if sum != 0 {
 							s.AverageLatency = new(int)
-							*s.AverageLatency = int(c.latency.Sum(s.Key) / sum)
+							*s.AverageLatency = int(c.latency.Sum(s.AssemblyKey) / sum)
 						}
+						s.MinLatency = new(int)
+						s.MaxLatency = new(int)
+						s.Latency99 = new(int)
+						*s.MinLatency = int(c.latencyRange.Min(s.AssemblyKey))
+						*s.MaxLatency = int(c.latencyRange.Max(s.AssemblyKey))
+						*s.Latency99 = int(c.latencyRange.R99(s.AssemblyKey))
 					}
 				}
 			}
