@@ -72,14 +72,14 @@ The configuration is a yaml file:
 	  socket: /tmp/mysql.scoket  # mysql address
 	  dbname: test               # dbname to login mysql
 
-### Global Configuration
+### Global
 
 * slave: The node's role.
 * serverport: Webserver port. Data will be pushed into any clients connected to this server with path '/collector'.
 * interval: Data pushing interval.
 * slowthresholdms: Threshold for data collector to record detial query infomation(**message.Message**).
 
-### Cluster Configuration
+### Cluster
 
 This is an optional configuration. By default, gossip will be utilized. If you don't associated the nodes with each other, you can build your own cluster above those standalone slaves.
 
@@ -87,7 +87,7 @@ This is an optional configuration. By default, gossip will be utilized. If you d
 * group: The lable distinguishs nodes belong to different clusters.
 * port: Gossip binding port. Specially, '0' indicates a ramdom port which could be found in the log.
 
-### Probe Configuration
+### Probe
 
 Most of configurations of this section ralate to **libpcap**. Only slave node creates probes. Obviously, slave must be deployed at the same machine with Mysql.
 
