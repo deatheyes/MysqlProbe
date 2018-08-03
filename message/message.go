@@ -67,8 +67,8 @@ type Summary struct {
 	SuccessCount      int        `json:"c"`           // success query number
 	FailedCount       int        `json:"d"`           // failed query number
 	LastSeen          int64      `json:"e"`           // the latest timestamp
-	SuccCostUsTotal   int64      `json:"f"`           // total cost of success query, we don't caculate average info for the sake of performence
-	FailedCostUsTotal int64      `json:"g"`           // total cost of failed query, we don't caculate average info for the sake of performence
+	SuccCostUsTotal   int64      `json:"f"`           // total cost of success query
+	FailedCostUsTotal int64      `json:"g"`           // total cost of failed query
 	NoGoodIndexUsed   int64      `json:"h"`           // count of SERVER_STATUS_NO_GOOD_INDEX_USED
 	NoIndexUsed       int64      `json:"i"`           // count of SERVER_STATUS_NO_INDEX_USED
 	QueryWasSlow      int64      `json:"j"`           // count of SERVER_QUERY_WAS_SLOW
