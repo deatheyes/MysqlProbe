@@ -26,7 +26,7 @@ type Config struct {
 type Cluster struct {
 	Gossip bool   `yaml:"gossip"` // if run as gossip cluster mode
 	Group  string `yaml:"group"`  // cluster name
-	Port   uint16 `yaml:"port"`   // gossip bind port, random if not set
+	Port   uint16 `yaml:"port"`   // gossip binding port, random if not set
 }
 
 // Probe specify the arguments to initialize pcap
