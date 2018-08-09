@@ -114,7 +114,7 @@ func (p *Pusher) Run() {
 		m := <-p.send
 		client, err := p.pool.getClient()
 		if err != nil {
-			glog.Warningf("[pusher] push message to %v failed: %v", client.conn.RemoteAddr(), err)
+			glog.Warningf("[pusher] push message failed: %v", err)
 		} else {
 			select {
 			case client.send <- m:
