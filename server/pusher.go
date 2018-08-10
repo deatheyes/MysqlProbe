@@ -55,7 +55,7 @@ type ClientPool struct {
 
 func newClientPool(servers []string, path string, preconnect bool) *ClientPool {
 	p := &ClientPool{
-		dialer: &websocket.Dialer{HandshakeTimeout: time.Duration(50) * time.Millisecond},
+		dialer: &websocket.Dialer{HandshakeTimeout: time.Duration(200) * time.Millisecond},
 		path:   path,
 	}
 
@@ -86,8 +86,9 @@ func (p *ClientPool) getClient() (*Client, error) {
 		if err != nil {
 			glog.Warningf("[pool] get client of %v%v failed: %v", slot.addr, slot.path, err)
 			continue
+		} else {
+			return client, nil
 		}
-		return client, nil
 	}
 	return nil, errors.New("[pool] all servers failed")
 }
