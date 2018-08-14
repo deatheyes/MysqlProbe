@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math/rand"
 	"net/url"
+	"sort"
 	"time"
 
 	"github.com/golang/glog"
@@ -16,6 +17,18 @@ type Slot struct {
 	path        string
 	connections []*Client
 	dialer      *websocket.Dialer
+}
+
+func (s *Slot) Len() int {
+	return len(s.connections)
+}
+
+func (s *Slot) Less(i, j int) bool {
+	return !s.connections[i].dead
+}
+
+func (s *Slot) Swap(i, j int) {
+	s.connections[i], s.connections[j] = s.connections[j], s.connections[i]
 }
 
 func (s *Slot) newClient() (*Client, error) {
@@ -32,17 +45,22 @@ func (s *Slot) newClient() (*Client, error) {
 }
 
 func (s *Slot) getClient() (*Client, error) {
-	if len(s.connections) == 0 {
+	// clean dead connections
+	sort.Sort(s)
+	count := 0
+	for _, v := range s.connections {
+		if !v.dead {
+			count++
+		} else {
+			break
+		}
+	}
+	s.connections = s.connections[:count]
+	// get a connection
+	if count == 0 {
 		return s.newClient()
 	}
-
-	id := rand.Int() % len(s.connections)
-	client := s.connections[rand.Int()%len(s.connections)]
-	if !client.dead {
-		return client, nil
-	}
-	s.connections = append(s.connections[:id], s.connections[id+1:]...)
-	return s.newClient()
+	return s.connections[rand.Int()%count], nil
 }
 
 // ClientPool keep the connections for pushing data
