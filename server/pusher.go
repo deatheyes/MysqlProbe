@@ -84,7 +84,7 @@ func (p *ClientPool) getClient() (*Client, error) {
 		slot := p.slots[pos]
 		client, err := slot.getClient()
 		if err != nil {
-			glog.Warningf("[pool] get client of %v%v failed: %v", slot.addr, slot.path, err)
+			glog.Warningf("[pool] get client of %v/%v failed: %v", slot.addr, slot.path, err)
 			continue
 		} else {
 			return client, nil
