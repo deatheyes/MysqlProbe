@@ -11,13 +11,13 @@ import (
 var (
 	connectTimeout       = time.Second
 	writeTimeout         = time.Second
-	pingPeriod           = 30 * time.Second
+	pingTimeout          = 30 * time.Second
 	retryPeriod          = 10 * time.Second
 	maxMessageSize int64 = 1 << 24
 )
 
-func pingTimeout() time.Duration {
-	return pingPeriod * 9 / 10
+func pingPeriod() time.Duration {
+	return pingTimeout * 9 / 10
 }
 
 var upgrader = websocket.Upgrader{
@@ -35,11 +35,11 @@ type Client struct {
 	send  chan []byte     // channel of outbound messages
 	dead  bool            // flag if the client is closed, used to detect a retry
 	retry int             // count of retry
-	ping  bool
+	ping  bool            // if need to ping the peer
 }
 
 func (c *Client) writePump() {
-	ticker := time.NewTicker(pingPeriod)
+	ticker := time.NewTicker(pingPeriod())
 	defer func() {
 		ticker.Stop()
 		c.conn.Close()
@@ -92,7 +92,13 @@ func (c *Client) readPump() {
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
-	c.conn.SetReadDeadline(time.Now().Add(pingTimeout()))
+	c.conn.SetReadDeadline(time.Now().Add(pingTimeout))
+	c.conn.SetPongHandler(
+		func(string) error {
+			c.conn.SetReadDeadline(time.Now().Add(pingTimeout))
+			return nil
+		},
+	)
 
 	for {
 		_, data, err := c.conn.ReadMessage()

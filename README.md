@@ -72,9 +72,8 @@ The configuration is a yaml file:
 	  socket: /tmp/mysql.scoket  # mysql address
 	  dbname: test               # dbname to login mysql
 	websocket:              # webscoket config for client and server
-	  readtimeoutms: 1000   # websocket read timeout(ms)
 	  writetimeoutms: 1000  # websocket write timeout(ms)
-	  pingperiods: 30       # webscoket ping period(s)
+	  pingtimeouts: 30      # webscoket ping period(s)
 	  reconnectperiods: 10  # websocket reconnect period(s)
 	  maxmessagesize: 16384 # websocket max message size(k)
 

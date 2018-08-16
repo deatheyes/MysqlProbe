@@ -57,7 +57,7 @@ type ConnectionWatcher struct {
 type Websocket struct {
 	ConnectTimeoutMs int   `yaml:"connecttimeoutms"`
 	WriteTimeoutMs   int   `yaml:"writetimeoutms"`
-	PingPeriodS      int   `yaml:"pingperiods"`
+	PingTimeoutS     int   `yaml:"pingtimeouts"`
 	ReconnectPeriodS int   `yaml:"reconnectperiods"`
 	MaxMessageSize   int64 `yaml:"maxmessagesize"`
 }
