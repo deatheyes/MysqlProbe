@@ -169,7 +169,7 @@ func (c *Collector) innerupdate() {
 						v.retry++
 					} else {
 						glog.V(5).Infof("collector reconnect to node %v success", k)
-						client := &Client{hub: c, conn: conn, send: make(chan []byte, 256), dead: false, retry: 0}
+						client := &Client{hub: c, conn: conn, send: make(chan []byte, 256), dead: false, retry: 0, ping: false}
 						c.clientAddrs[k] = client
 						// register client
 						c.register <- client
