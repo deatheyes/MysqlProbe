@@ -9,10 +9,10 @@ import (
 )
 
 const (
-	writeTimeout   = 10 * time.Second
+	writeTimeout   = time.Second
 	pongTimeout    = 30 * time.Second
 	pingPeriod     = (pongTimeout * 9) / 10
-	retryPerid     = 10 * time.Second
+	retryPeriod     = 10 * time.Second
 	maxMessageSize = 1 << 24
 )
 

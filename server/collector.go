@@ -102,7 +102,7 @@ func (c *Collector) RemoveNode(addr string) {
 // this function run as fake server
 // we need to care about the retry if the client has been unregister but the node not
 func (c *Collector) innerupdate() {
-	ticker := time.NewTicker(retryPerid)
+	ticker := time.NewTicker(retryPeriod)
 	defer ticker.Stop()
 
 	dialer := &websocket.Dialer{HandshakeTimeout: time.Duration(50) * time.Millisecond}
