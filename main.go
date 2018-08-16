@@ -57,8 +57,12 @@ func main() {
 		conf.Role = "slave"
 	}
 
+	// initilize websocket config
+	server.InitWebsocketEnv(conf)
+
 	// start server
-	glog.Infof("run server, role: %v port: %v report period: %v s gossip: %v group: %v", conf.Role, conf.Port, conf.Interval, conf.Cluster.Gossip, conf.Cluster.Group)
+	glog.Infof("run server, role: %v port: %v report period: %v s gossip: %v group: %v",
+		conf.Role, conf.Port, conf.Interval, conf.Cluster.Gossip, conf.Cluster.Group)
 	s := server.NewServer(conf)
 	go s.Run()
 

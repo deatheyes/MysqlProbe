@@ -105,7 +105,7 @@ func (c *Collector) innerupdate() {
 	ticker := time.NewTicker(retryPeriod)
 	defer ticker.Stop()
 
-	dialer := &websocket.Dialer{HandshakeTimeout: time.Duration(50) * time.Millisecond}
+	dialer := &websocket.Dialer{HandshakeTimeout: connectTimeout}
 	glog.Info("collect innerupdate run...")
 	for {
 		select {
@@ -130,7 +130,6 @@ func (c *Collector) innerupdate() {
 					// register client
 					c.register <- client
 					glog.V(5).Infof("collector add node %v done", addr)
-					go client.writePump()
 					go client.readPump()
 				}
 			} else {

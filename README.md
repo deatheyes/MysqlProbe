@@ -66,11 +66,17 @@ The configuration is a yaml file:
 	  servers: 127.0.0.1:8668,127.0.0.1:8669 # server list splited by ','. pusher will select one server to push data
 	  path: websocket                        # websocket path
 	  preconnect: true                       # create connection to all servers
-	watcher: # watcher is responsible for cache and refresh map of dbname and connection
+	watcher:                     # watcher is responsible for cache and refresh map of dbname and connection
 	  uname: test                # user name for login mysql
 	  passward: test             # passward to login mysql
 	  socket: /tmp/mysql.scoket  # mysql address
 	  dbname: test               # dbname to login mysql
+	websocket:              # webscoket config for client and server
+	  readtimeoutms: 1000   # websocket read timeout(ms)
+	  writetimeoutms: 1000  # websocket write timeout(ms)
+	  pingperiods: 30       # webscoket ping period(s)
+	  reconnectperiods: 10  # websocket reconnect period(s)
+	  maxmessagesize: 16384 # websocket max message size(k)
 
 ### Global
 

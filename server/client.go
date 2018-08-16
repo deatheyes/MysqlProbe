@@ -8,12 +8,13 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-const (
-	writeTimeout   = time.Second
-	pongTimeout    = 30 * time.Second
-	pingPeriod     = (pongTimeout * 9) / 10
-	retryPeriod     = 10 * time.Second
-	maxMessageSize = 1 << 24
+var (
+	connectTimeout       = time.Second
+	writeTimeout         = time.Second
+	readTimeout          = time.Second
+	pingPeriod           = (time.Second * 9 * 30) / 10
+	retryPeriod          = 10 * time.Second
+	maxMessageSize int64 = 1 << 24
 )
 
 var upgrader = websocket.Upgrader{
@@ -85,10 +86,10 @@ func (c *Client) readPump() {
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
-	c.conn.SetReadDeadline(time.Now().Add(pongTimeout))
+	c.conn.SetReadDeadline(time.Now().Add(readTimeout))
 	c.conn.SetPongHandler(
 		func(string) error {
-			c.conn.SetReadDeadline(time.Now().Add(pongTimeout))
+			c.conn.SetReadDeadline(time.Now().Add(readTimeout))
 			return nil
 		},
 	)
@@ -96,12 +97,15 @@ func (c *Client) readPump() {
 	for {
 		_, data, err := c.conn.ReadMessage()
 		if err != nil {
+			if websocket.IsCloseError(err) {
+				glog.V(6).Infof("connection closed, remote address: %v", c.conn.RemoteAddr)
+				return
+			}
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				glog.Warningf("connection closed unexpected: %v", err)
-			} else {
-				glog.Warningf("read data failed: %v", err)
+				return
 			}
-			break
+			glog.Warningf("read data failed: %v", err)
 		}
 		if c.hub != nil {
 			c.hub.ProcessData(data)

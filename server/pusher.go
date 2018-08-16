@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"net/url"
 	"sort"
-	"time"
 
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
@@ -38,7 +37,6 @@ func (s *Slot) newClient() (*Client, error) {
 		return nil, err
 	}
 	client := &Client{hub: nil, conn: conn, send: make(chan []byte, 256), dead: false, retry: 0}
-	go client.readPump()
 	go client.writePump()
 	s.connections = append(s.connections, client)
 	return client, nil
@@ -73,7 +71,7 @@ type ClientPool struct {
 
 func newClientPool(servers []string, path string, preconnect bool) *ClientPool {
 	p := &ClientPool{
-		dialer: &websocket.Dialer{HandshakeTimeout: time.Duration(200) * time.Millisecond},
+		dialer: &websocket.Dialer{HandshakeTimeout: connectTimeout},
 		path:   path,
 	}
 

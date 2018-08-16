@@ -18,6 +18,7 @@ type Config struct {
 	Probe           Probe             `yaml:"probe"`           // probe conifg, only slave will start a probe
 	Pusher          Pusher            `yaml:"pusher"`          // pusher config
 	Watcher         ConnectionWatcher `yaml:"watcher"`         // connection watcher config
+	Websocket       Websocket         `yaml:"websocket"`       // websocket config
 	Role            string            `yaml:"-"`               // role of this node
 	Path            string            `yaml:"-"`               // config file path
 }
@@ -50,6 +51,16 @@ type ConnectionWatcher struct {
 	Password string `yaml:"password"`
 	Sock     string `yaml:"sock"`
 	DBname   string `yaml:"dbname"`
+}
+
+// Websocket is the config of websocket client and server
+type Websocket struct {
+	ConnectTimeoutMs int   `yaml:"connecttimeoutms"`
+	ReadTimeoutMs    int   `yaml:"readtimeoutms"`
+	WriteTimeoutMs   int   `yaml:"writetimeoutms"`
+	PingPeriodS      int   `yaml:"pingperiods"`
+	ReconnectPeriodS int   `yaml:"reconnectperiods"`
+	MaxMessageSize   int64 `yaml:"maxmessagesize"`
 }
 
 // ReadFile load config from file
