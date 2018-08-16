@@ -88,7 +88,8 @@ func serveWs(dispatcher *Dispatcher, w http.ResponseWriter, r *http.Request) {
 	}
 
 	// we don't care about 'dead' and 'retry' of the client in server mode
-	client := &Client{hub: dispatcher, conn: conn, send: make(chan []byte, 256)}
+	client := &Client{hub: dispatcher, conn: conn, send: make(chan []byte, 256), ping: true}
 	client.hub.Register() <- client
 	go client.writePump()
+	go client.readPump()
 }

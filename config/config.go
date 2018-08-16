@@ -56,7 +56,6 @@ type ConnectionWatcher struct {
 // Websocket is the config of websocket client and server
 type Websocket struct {
 	ConnectTimeoutMs int   `yaml:"connecttimeoutms"`
-	ReadTimeoutMs    int   `yaml:"readtimeoutms"`
 	WriteTimeoutMs   int   `yaml:"writetimeoutms"`
 	PingPeriodS      int   `yaml:"pingperiods"`
 	ReconnectPeriodS int   `yaml:"reconnectperiods"`

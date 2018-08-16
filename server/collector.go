@@ -125,11 +125,12 @@ func (c *Collector) innerupdate() {
 				if err != nil {
 					glog.Warningf("collector add node %v failed: %v", addr, err)
 				} else {
-					client := &Client{hub: c, conn: conn, send: make(chan []byte, 256), dead: false, retry: 0}
+					client := &Client{hub: c, conn: conn, send: make(chan []byte, 256), dead: false, retry: 0, ping: false}
 					c.clientAddrs[addr] = client
 					// register client
 					c.register <- client
 					glog.V(5).Infof("collector add node %v done", addr)
+					go client.writePump()
 					go client.readPump()
 				}
 			} else {

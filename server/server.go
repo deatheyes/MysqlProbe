@@ -13,10 +13,6 @@ import (
 
 // InitWebsocketEnv set global config for websocket client and server
 func InitWebsocketEnv(config *config.Config) {
-	if config.Websocket.ReadTimeoutMs > 0 {
-		readTimeout = time.Duration(config.Websocket.ReadTimeoutMs) * time.Millisecond
-	}
-
 	if config.Websocket.WriteTimeoutMs > 0 {
 		writeTimeout = time.Duration(config.Websocket.WriteTimeoutMs) * time.Millisecond
 	}
@@ -33,8 +29,8 @@ func InitWebsocketEnv(config *config.Config) {
 		maxMessageSize = config.Websocket.MaxMessageSize * 1024
 	}
 
-	glog.Infof("intialize websocket env done, connect timeout: %v, read timeout: %vms, write timeout: %vms, ping period: %vs, retry period: %vs, max message size: %vk",
-		connectTimeout, readTimeout, writeTimeout, pingPeriod, retryPeriod, maxMessageSize)
+	glog.Infof("intialize websocket env done, connect timeout: %v, write timeout: %vms, ping period: %vs, retry period: %vs, max message size: %vk",
+		connectTimeout, writeTimeout, pingPeriod, retryPeriod, maxMessageSize)
 }
 
 // Server manage all network input and output

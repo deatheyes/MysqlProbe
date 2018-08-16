@@ -36,8 +36,9 @@ func (s *Slot) newClient() (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	client := &Client{hub: nil, conn: conn, send: make(chan []byte, 256), dead: false, retry: 0}
+	client := &Client{hub: nil, conn: conn, send: make(chan []byte, 256), dead: false, retry: 0, ping: true}
 	go client.writePump()
+	go client.readPump()
 	s.connections = append(s.connections, client)
 	return client, nil
 }

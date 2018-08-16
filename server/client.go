@@ -11,11 +11,14 @@ import (
 var (
 	connectTimeout       = time.Second
 	writeTimeout         = time.Second
-	readTimeout          = time.Second
-	pingPeriod           = (time.Second * 9 * 30) / 10
+	pingPeriod           = 30 * time.Second
 	retryPeriod          = 10 * time.Second
 	maxMessageSize int64 = 1 << 24
 )
+
+func pingTimeout() time.Duration {
+	return pingPeriod * 9 / 10
+}
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1 << 24,
@@ -32,6 +35,7 @@ type Client struct {
 	send  chan []byte     // channel of outbound messages
 	dead  bool            // flag if the client is closed, used to detect a retry
 	retry int             // count of retry
+	ping  bool
 }
 
 func (c *Client) writePump() {
@@ -66,11 +70,13 @@ func (c *Client) writePump() {
 				return
 			}
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
-			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				// client closed unexpected
-				glog.Warningf("ping client failed: %v", err)
-				return
+			if c.ping {
+				c.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+				if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					// client closed unexpected
+					glog.Warningf("ping client failed: %v", err)
+					return
+				}
 			}
 		}
 	}
@@ -86,26 +92,17 @@ func (c *Client) readPump() {
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
-	c.conn.SetReadDeadline(time.Now().Add(readTimeout))
-	c.conn.SetPongHandler(
-		func(string) error {
-			c.conn.SetReadDeadline(time.Now().Add(readTimeout))
-			return nil
-		},
-	)
+	c.conn.SetReadDeadline(time.Now().Add(pingTimeout()))
 
 	for {
 		_, data, err := c.conn.ReadMessage()
 		if err != nil {
-			if websocket.IsCloseError(err) {
-				glog.V(6).Infof("connection closed, remote address: %v", c.conn.RemoteAddr)
-				return
-			}
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
 				glog.Warningf("connection closed unexpected: %v", err)
-				return
+			} else {
+				glog.Warningf("read data failed: %v", err)
 			}
-			glog.Warningf("read data failed: %v", err)
+			return
 		}
 		if c.hub != nil {
 			c.hub.ProcessData(data)
