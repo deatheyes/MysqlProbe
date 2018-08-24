@@ -116,7 +116,7 @@ Watcher is the module responsible for building map from connection to db. It nee
 * sock: Mysql unix domain sock path.
 
 ## Output
-Data collected from slave or master will be reported in form of json. The report contains statistical items:
+Data collected from slave or master will be reported in form of json compressed by snappy. The report contains statistical items:
 
 * sql template: A sql template is a sql like text without constant condition value. eg. "select * from user where name=?".
 * latency: The execution latency in microsecond.
