@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 
@@ -54,6 +55,7 @@ type MysqlRequestPacket struct {
 	sql    []byte
 	stmtID uint32 // statement id of execute
 	stmt   sqlparser.Statement
+	dbname string
 }
 
 // Seq return the sequence id in head
@@ -144,6 +146,8 @@ func (p *MysqlBasePacket) ParseRequestPacket() (*MysqlRequestPacket, error) {
 		}
 		stmtID := uint32(p.Data[1]) | uint32(p.Data[2])<<8 | uint32(p.Data[3])<<16 | uint32(p.Data[4])<<24
 		return &MysqlRequestPacket{seq: p.Seq(), cmd: comStmtExecute, stmtID: stmtID}, nil
+	case comInitDB:
+		return &MysqlRequestPacket{seq: p.Seq(), cmd: comInitDB, dbname: string(p.Data[1:])}, nil
 	default:
 		return nil, errParsedFailed
 	}
@@ -237,4 +241,132 @@ func (p *MysqlBasePacket) parsePrepare() (*MysqlResponsePacket, error) {
 	default:
 		return nil, errParsedFailed
 	}
+}
+
+// https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse
+func (p *MysqlBasePacket) parseHandShakeResponse320(capabilities uint32) (uname string, dbname string, err error) {
+	pos := 2 + 3
+	if len(p.Data) < pos {
+		err = errNotEnouthData
+		glog.Warningf("[handshake response320] unexpected data length: %v", len(p.Data))
+		return
+	}
+
+	// uname string[0x00]
+	unameEndIndex := bytes.IndexByte(p.Data[pos:], 0x00)
+	if unameEndIndex < 0 {
+		err = errNotEnouthData
+		glog.Warning("[handshake response320] failed in parsing uname")
+		return
+	}
+	uname = string(p.Data[pos : pos+unameEndIndex])
+	pos += unameEndIndex + 1
+
+	if capabilities&clientConnectWithDB != 0 {
+		// auth response string[0x00]
+		authEndIndex := bytes.IndexByte(p.Data[pos:], 0x00)
+		if authEndIndex < 0 {
+			err = errNotEnouthData
+			glog.Warning("[handshake response320] failed in parsing auth response")
+			return
+		}
+		pos += authEndIndex + 1
+
+		// dbname string[0x00]
+		dbnameEndIndex := bytes.IndexByte(p.Data[pos:], 0x00)
+		if dbnameEndIndex < 0 {
+			err = errNotEnouthData
+			glog.Warning("[handshake response320] failed in parsing dbname")
+			return
+		}
+		dbname = string(p.Data[pos : pos+dbnameEndIndex])
+		pos += dbnameEndIndex + 1
+	}
+	// TODO: parse auth-response[EOF], which we don't need currently
+	return
+}
+
+// https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse
+func (p *MysqlBasePacket) parseHandShakeResponse41(capabilities uint32) (uname string, dbname string, err error) {
+	pos := 4 + 4 + 1 + 23
+	if len(p.Data) < pos {
+		err = errNotEnouthData
+		glog.Warningf("[handshake response41] unexpected data length: %v", len(p.Data))
+		return
+	}
+
+	// uname string[0x00]
+	unameEndIndex := bytes.IndexByte(p.Data[pos:], 0x00)
+	if unameEndIndex < 0 {
+		err = errNotEnouthData
+		glog.Warning("[handshake response41] failed in parsing uname")
+		return
+	}
+	uname = string(p.Data[pos : pos+unameEndIndex])
+	pos += unameEndIndex + 1
+
+	if capabilities&clientPluginAuthLenEncClientData != 0 {
+		// plugin auth length encode client data
+		pluginInfoLength, _, m := util.ReadLengthEncodedInteger(p.Data[pos:])
+		pos += m + int(pluginInfoLength)
+		if pos > len(p.Data) {
+			glog.Warning("[handshake response41] failed in parsing clientPluginAuth")
+			err = errNotEnouthData
+			return
+		}
+	} else if capabilities&clientSecureConn != 0 {
+		// client secure connection
+		secureInfoLength, _, m := util.ReadLengthEncodedInteger(p.Data[pos:])
+		pos += m + int(secureInfoLength)
+		if pos > len(p.Data) {
+			glog.Warning("[handshake response41] failed in parsing clientSecureConn")
+			err = errNotEnouthData
+			return
+		}
+	} else {
+		// auth response string[0x00]
+		stringEndIndex := bytes.IndexByte(p.Data[pos:], 0x00)
+		if stringEndIndex < 0 {
+			glog.Warning("[handshake response41] failed in parsing auth-response")
+			err = errNotEnouthData
+			return
+		}
+		pos += stringEndIndex + 1
+	}
+
+	if capabilities&clientConnectWithDB != 0 {
+		// dbname string[0x00]
+		dbnameEndIndex := bytes.IndexByte(p.Data[pos:], 0x00)
+		if dbnameEndIndex < 0 {
+			glog.Warning("[handshake response41] failed in parsing dbname")
+			err = errNotEnouthData
+			return
+		}
+		dbname = string(p.Data[pos : pos+dbnameEndIndex])
+		pos += dbnameEndIndex + 1
+	}
+
+	if capabilities&clientPluginAuth != 0 {
+		// client plugin auth string[0x00]
+		pluginAuthEndIndex := bytes.IndexByte(p.Data[pos:], 0x00)
+		if pluginAuthEndIndex < 0 {
+			glog.Warning("[handshake response41] failed in parsing auth plugin name")
+			err = errNotEnouthData
+			return
+		}
+		pos += pluginAuthEndIndex + 1
+	}
+
+	// TODO: parse client connect attributes, which we don't need currently
+	/*if capabilities&clientConnectAttrs != 0 {
+	  }*/
+	return
+}
+
+func (p *MysqlBasePacket) parseHandShakeResponse() (uname string, dbname string, err error) {
+	capabilities := uint32(p.Data[0]) | uint32(p.Data[1])<<8 | uint32(p.Data[2])<<16 | uint32(p.Data[3])<<24
+	if capabilities&clientProtocol41 == 0 {
+		return p.parseHandShakeResponse320(capabilities)
+	}
+	return p.parseHandShakeResponse41(capabilities)
 }

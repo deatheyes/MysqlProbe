@@ -236,13 +236,13 @@ func (r *RollingRange) run() {
 	ticker := time.NewTicker(interval)
 	for {
 		<-ticker.C
+		r.Lock()
 		for k, v := range r.rings {
 			if time.Now().Sub(v.lastseen) > r.expiration {
-				r.Lock()
 				delete(r.rings, k)
-				r.Unlock()
 			}
 		}
+		r.Unlock()
 	}
 }
 

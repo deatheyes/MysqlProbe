@@ -37,6 +37,8 @@ type MysqlStream struct {
 	closed     bool                 // close flag
 	stop       chan struct{}        // notify close
 	in         chan gopacket.Packet // input channel
+	dbname     string               // dbname get from handshake response
+	uname      string               // uname get from handshake response
 }
 
 func newMysqlStream(assembly *Assembly, localIP string, localPort string, clientIP string, clientPort string, key Key) *MysqlStream {
@@ -69,6 +71,7 @@ func (s *MysqlStream) run() {
 	stmtmap := make(map[uint32]string) // map to register the statement
 	var msg *message.Message
 	var err error
+	handshake := false
 	for {
 		select {
 		case packet := <-s.in:
@@ -80,7 +83,7 @@ func (s *MysqlStream) run() {
 
 			key := Key{packet.NetworkLayer().NetworkFlow(), packet.TransportLayer().TransportFlow()}
 			if s.assembly.isRequest(key.net, key.transport) {
-				// parse request packet
+				// parse client packet
 				// Note: there may be many mysql packets in one tcp packet.
 				// we only care about the first mysql packet,
 				// which should only be the first part of tcp payload regardless of what the tcp packet seq is.
@@ -88,6 +91,24 @@ func (s *MysqlStream) run() {
 				if _, err = basePacket.DecodeFromBytes(tcp.Payload); err != nil {
 					glog.V(6).Infof("[%v] parse request base packet failed: %v", s.name, err)
 					continue
+				}
+
+				// parse handshake response
+				if handshake {
+					handshake = false
+					if basePacket.Seq() == 1 {
+						// this packet should be a handshake response
+						uname, dbname, err := basePacket.parseHandShakeResponse()
+						if err != nil {
+							// maybe not a handshake response
+							glog.Warningf("[%v] parse handshake response failed: %v", s.name, err)
+						} else {
+							glog.V(6).Infof("[%v] parse handshake response done, uname: %v, dbname: %v", s.name, uname, dbname)
+							s.uname = uname
+							s.dbname = dbname
+							continue
+						}
+					}
 				}
 
 				// filter
@@ -112,6 +133,7 @@ func (s *MysqlStream) run() {
 				case comQuery:
 					// this is a raw sql query
 					msg.SQL = generateQuery(reqPacket.Stmt(), true)
+					msg.Raw = reqPacket.SQL()
 					glog.V(6).Infof("[%v] [query] sql: %v", s.name, reqPacket.SQL())
 				case comStmtPrepare:
 					// the statement will be registered if processed OK
@@ -120,11 +142,13 @@ func (s *MysqlStream) run() {
 					stmtID := reqPacket.StmtID()
 					if _, ok := stmtmap[stmtID]; !ok {
 						// no statement, the corresponding prepare request has not been captured.
-						glog.V(5).Infof("[%v] no corresponding local statement found, stmtID: %v", s.name, stmtID)
+						glog.V(5).Infof("[%v] [execute] no corresponding local statement found, stmtID: %v", s.name, stmtID)
 					} else {
 						msg.SQL = stmtmap[stmtID]
 						glog.V(6).Infof("[%v] [execute] stmtID: %v, sql: %v", s.name, stmtID, stmtmap[stmtID])
 					}
+				case comInitDB:
+					glog.V(6).Infof("[%v] [init db] dbname: %v", s.name, reqPacket.dbname)
 				default:
 					// not the packet concerned, continue
 					glog.V(8).Infof("[%v] receive unconcerned request packet", s.name)
@@ -132,18 +156,26 @@ func (s *MysqlStream) run() {
 					continue
 				}
 			} else {
-				// parse response packet
-				if reqPacket == nil {
-					// if there is no request, skip this packet ASAP
-					continue
-				}
-
+				// parse server packet
 				// Note: there may be many mysql packets in one tcp packet.
 				// we only care about the first mysql packet,
 				// which should only be the first part of tcp payload regardless of what the tcp packet seq is.
 				basePacket := &MysqlBasePacket{}
 				if _, err = basePacket.DecodeFromBytes(tcp.Payload); err != nil {
 					glog.V(6).Infof("[%v] parse response base packet failed: %v", s.name, err)
+					continue
+				}
+
+				// detect handshake
+				if basePacket.Seq() == 0 {
+					// handshake packet
+					handshake = true
+					glog.V(6).Infof("[%v] detect handshake packet: %v", s.name)
+					continue
+				}
+
+				if reqPacket == nil {
+					// if there is no request, skip this packet ASAP
 					continue
 				}
 
@@ -172,6 +204,9 @@ func (s *MysqlStream) run() {
 					if reqPacket.CMD() == comStmtPrepare {
 						glog.V(6).Infof("[%v] [prepare] response OK, stmtID: %v, sql: %v", s.name, rspPacket.StmtID(), reqPacket.SQL())
 						stmtmap[rspPacket.StmtID()] = reqPacket.SQL()
+					} else if reqPacket.CMD() == comInitDB {
+						glog.V(6).Infof("[%v] [init db] response OK, dbname: %v", s.name, reqPacket.dbname)
+						s.dbname = reqPacket.dbname
 					}
 				case iERR:
 					msg.Err = true
@@ -187,12 +222,17 @@ func (s *MysqlStream) run() {
 				// there is no SQL in prepare message.
 				// need more precise filter about control command such as START, END.
 				if len(msg.SQL) > 5 {
-					// find db name
-					clientAddr := s.clientIP + ":" + s.clientPort
-					if info := s.assembly.watcher.Get(clientAddr); info != nil {
-						msg.DB = string(info.DB)
+					// set db name
+					if len(s.dbname) != 0 {
+						msg.DB = s.dbname
 					} else {
-						msg.DB = unknowDbName
+						// find db name
+						clientAddr := s.clientIP + ":" + s.clientPort
+						if info := s.assembly.watcher.Get(clientAddr); info != nil {
+							msg.DB = string(info.DB)
+						} else {
+							msg.DB = unknowDbName
+						}
 					}
 					msg.AssemblyKey = msg.AssemblyHashKey()
 

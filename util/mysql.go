@@ -3,6 +3,7 @@ package util
 import (
 	"bytes"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -94,7 +95,7 @@ func (w *ConnectionWatcher) Get(key string) *DBConnectionInfo {
 
 // DBConnectionInfo retrieves the db connection info
 type DBConnectionInfo struct {
-	ID, User, Host, DB, Cmd, Time, State, Info []byte
+	ID, User, Host, DB, Cmd, Time, State, Info, Sent, Examined []byte
 }
 
 // Key generate the bytes for comparison
@@ -120,11 +121,33 @@ func GetMysqlConnectionInfo(user string, password string, sock string, dbname st
 		return nil, err
 	}
 
+	version := 0
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(cols) == 10 {
+		version = 5
+	} else if len(cols) == 8 {
+		version = 8
+	}
+
+	if version == 0 {
+		return nil, errors.New("unknown mysql version")
+	}
+
 	ret := make(map[string]*DBConnectionInfo)
 	for rows.Next() {
 		data := &DBConnectionInfo{}
-		if err := rows.Scan(&data.ID, &data.User, &data.Host, &data.DB, &data.Cmd, &data.Time, &data.State, &data.Info); err != nil {
-			return nil, err
+		if version == 8 {
+			if err := rows.Scan(&data.ID, &data.User, &data.Host, &data.DB, &data.Cmd, &data.Time, &data.State, &data.Info); err != nil {
+				return nil, err
+			}
+		} else {
+			if err := rows.Scan(&data.ID, &data.User, &data.Host, &data.DB, &data.Cmd, &data.Time, &data.State, &data.Info, &data.Sent, &data.Examined); err != nil {
+				return nil, err
+			}
 		}
 		if len(data.Host) == 0 || string(data.Host) == localhost || len(data.DB) == 0 {
 			continue

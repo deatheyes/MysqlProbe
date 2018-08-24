@@ -43,6 +43,35 @@ const (
 	comStmtFetch
 )
 
+// capability flags
+const (
+	clientLongPassword uint32 = 1 << iota
+	clientFoundRows
+	clientLongFlag
+	clientConnectWithDB
+	clientNoSchema
+	clientCompress
+	clientODBC
+	clientLocalFiles
+	clientIgnoreSpace
+	clientProtocol41
+	clientInteractive
+	clientSSL
+	clientIgnoreSIGPIPE
+	clientTransactions
+	clientReserved
+	clientSecureConn
+	clientMultiStatements
+	clientMultiResults
+	clientPSMultiResults
+	clientPluginAuth
+	clientConnectAttrs
+	clientPluginAuthLenEncClientData
+	clientCanHandleExpiredPasswords
+	clientSessionTrack
+	clientDeprecateEOF
+)
+
 // probe
 const (
 	inputQueueLength = 2000            // stream input queue length

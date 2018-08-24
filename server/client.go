@@ -56,17 +56,10 @@ func (c *Client) writePump() {
 				return
 			}
 
-			c.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
-			w, err := c.conn.NextWriter(websocket.TextMessage)
-			if err != nil {
-				glog.Warningf("get next writer failed: %v", err)
-				return
-			}
-
-			w.Write(message)
-
-			if err := w.Close(); err != nil {
-				glog.Warningf("close writer failed: %v", err)
+			start := time.Now()
+			c.conn.SetWriteDeadline(start.Add(writeTimeout))
+			if err := c.conn.WriteMessage(websocket.BinaryMessage, message); err != nil {
+				glog.Warningf("write message failed: %v, cost: %v", err, time.Now().Sub(start))
 				return
 			}
 		case <-ticker.C:

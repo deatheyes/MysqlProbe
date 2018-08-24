@@ -79,6 +79,7 @@ type Summary struct {
 	Latency99         *int       `json:"o,omitempty"` // latency of 99 quantile
 	Slow              []*Message `json:"p,omitempty"` // slow queries
 	AssemblyKey       string     `json:"q,omitempty"` // hash key for assembly
+	Sample            *Message   `json:"r,omitempty"` // one normal query sample
 }
 
 // AddMessage asseble a Message to this summary
@@ -117,6 +118,8 @@ func (s *Summary) AddMessage(m *Message, slow bool) bool {
 	// slow query
 	if slow {
 		s.Slow = append(s.Slow, m)
+	} else if s.Sample == nil {
+		s.Sample = m
 	}
 	return true
 }

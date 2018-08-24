@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/golang/snappy"
 	"github.com/gorilla/websocket"
 
 	"github.com/deatheyes/MysqlProbe/message"
@@ -217,13 +218,19 @@ func (c *Collector) Unregister() chan<- *Client {
 
 // ProcessData decode the report received from slaves
 func (c *Collector) ProcessData(data []byte) {
-	r, err := message.DecodeReportFromBytes(data)
-	if err != nil {
-		glog.Warningf("decode report failed: %v", err)
-		return
+	// snappy decode
+	dst := make([]byte, len(data)*10)
+	if buf, err := snappy.Decode(dst, data); err != nil {
+		glog.Warningf("snappy decode failed: %v", err)
+	} else {
+		r, err := message.DecodeReportFromBytes(buf)
+		if err != nil {
+			glog.Warningf("decode report failed: %v", err)
+			return
+		}
+		// gather reports from remote slaves, this is only avaiable on master
+		c.reportIn <- r
 	}
-	// gather reports from remote slaves, this is only avaiable on master
-	c.reportIn <- r
 }
 
 // merge collected reports, used by master and standby master
@@ -308,7 +315,9 @@ func (c *Collector) Run() {
 					glog.Warningf("[collector] encode report failed: %v", err)
 				} else {
 					glog.V(8).Info("[collector] send report %v", data)
-					c.report <- data
+					// compress and report
+					dst := make([]byte, len(data))
+					c.report <- snappy.Encode(dst, data)
 				}
 				report = message.NewReport()
 			}
