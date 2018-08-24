@@ -244,7 +244,7 @@ func (s *MysqlStream) run() {
 				rspPacket = nil
 			}
 		case <-s.stop:
-			glog.Infof("[%v] close stream", s.name)
+			glog.V(6).Infof("[%v] close stream", s.name)
 			return
 		}
 	}
