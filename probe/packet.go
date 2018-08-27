@@ -6,7 +6,7 @@ import (
 	"errors"
 
 	"github.com/golang/glog"
-	"github.com/xwb1989/sqlparser"
+	"github.com/deatheyes/sqlparser"
 
 	"github.com/deatheyes/MysqlProbe/util"
 )

@@ -1,7 +1,7 @@
 package probe
 
 import (
-	"github.com/xwb1989/sqlparser"
+	"github.com/deatheyes/sqlparser"
 )
 
 // TemplateFormatter replace all the const values to '?'
