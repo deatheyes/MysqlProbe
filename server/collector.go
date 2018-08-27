@@ -244,14 +244,14 @@ func (c *Collector) assembleReport(target, slice *message.Report) {
 func (c *Collector) assembleMessage(target *message.Report, slice *message.Message) {
 	glog.V(7).Infof("[collector] merge message: %v", slice.SQL)
 	// merge message
-	slow := (slice.Latency / 1000) > c.slowThreshold
+	slow := slice.Latency > float32(c.slowThreshold)
 	target.AddMessage(slice, slow)
 	// caculate qps
 	key := slice.AssemblyKey
 	c.qps.Add(key, 1)
 	// caculate latency us
-	c.latency.Add(key, slice.Latency)
-	c.latencyRange.Add(key, slice.Latency)
+	c.latency.Add(key, int64(slice.Latency*1000))
+	c.latencyRange.Add(key, int64(slice.Latency*1000))
 }
 
 // Run start the main assembling process on message and report level
@@ -296,15 +296,15 @@ func (c *Collector) Run() {
 						*s.QPS = int(c.qps.AverageInSecond(s.AssemblyKey))
 						sum := c.qps.Sum(s.AssemblyKey)
 						if sum != 0 {
-							s.AverageLatency = new(int)
-							*s.AverageLatency = int(c.latency.Sum(s.AssemblyKey) / sum)
+							s.AverageLatency = new(float32)
+							*s.AverageLatency = float32(c.latency.Sum(s.AssemblyKey)/sum) / 1000
 						}
-						s.MinLatency = new(int)
-						s.MaxLatency = new(int)
-						s.Latency99 = new(int)
-						*s.MinLatency = int(c.latencyRange.Min(s.AssemblyKey))
-						*s.MaxLatency = int(c.latencyRange.Max(s.AssemblyKey))
-						*s.Latency99 = int(c.latencyRange.R99(s.AssemblyKey))
+						s.MinLatency = new(float32)
+						s.MaxLatency = new(float32)
+						s.Latency99 = new(float32)
+						*s.MinLatency = float32(c.latencyRange.Min(s.AssemblyKey)) / 1000
+						*s.MaxLatency = float32(c.latencyRange.Max(s.AssemblyKey)) / 1000
+						*s.Latency99 = float32(c.latencyRange.R99(s.AssemblyKey)) / 1000
 					}
 				}
 			}

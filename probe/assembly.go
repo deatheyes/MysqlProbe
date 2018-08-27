@@ -191,7 +191,7 @@ func (s *MysqlStream) run() {
 				}
 				s.lastSeen = packet.Metadata().Timestamp.UnixNano()
 				msg.TimestampRsp = s.lastSeen
-				msg.Latency = (msg.TimestampRsp - msg.TimestampReq) / 1000
+				msg.Latency = float32(msg.TimestampRsp-msg.TimestampReq) / 1000000
 
 				// parse reponse and fill message
 				status := rspPacket.Status()

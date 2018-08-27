@@ -27,22 +27,22 @@ const (
 
 // Message is the info of a sql query
 type Message struct {
-	DB           string `json:"a"` // db name
-	SQL          string `json:"b"` // templated sql
-	Raw          string `json:"c"` // raw sql
-	Err          bool   `json:"d"` // sql process error
-	ErrMsg       string `json:"e"` // sql process error message
-	Errno        uint16 `json:"f"` // sql process error number
-	ServerStatus uint16 `json:"g"` // server response status code
-	AffectRows   uint64 `json:"h"` // affect rows
-	TimestampReq int64  `json:"i"` // timestamp for request package
-	TimestampRsp int64  `json:"j"` // timestamp for response package
-	Latency      int64  `json:"k"` // latency in microsecond
-	ServerIP     string `json:"l"` // server ip
-	ServerPort   uint16 `json:"m"` // server port
-	ClientIP     string `json:"n"` // client ip
-	ClientPort   uint16 `json:"o"` // client port
-	AssemblyKey  string `json:"p"` // hash key for assembly
+	DB           string  `json:"a"` // db name
+	SQL          string  `json:"b"` // templated sql
+	Raw          string  `json:"c"` // raw sql
+	Err          bool    `json:"d"` // sql process error
+	ErrMsg       string  `json:"e"` // sql process error message
+	Errno        uint16  `json:"f"` // sql process error number
+	ServerStatus uint16  `json:"g"` // server response status code
+	AffectRows   uint64  `json:"h"` // affect rows
+	TimestampReq int64   `json:"i"` // timestamp for request package
+	TimestampRsp int64   `json:"j"` // timestamp for response package
+	Latency      float32 `json:"k"` // latency in millisecond
+	ServerIP     string  `json:"l"` // server ip
+	ServerPort   uint16  `json:"m"` // server port
+	ClientIP     string  `json:"n"` // client ip
+	ClientPort   uint16  `json:"o"` // client port
+	AssemblyKey  string  `json:"p"` // hash key for assembly
 }
 
 // HashKey hash(sql) for map
@@ -62,24 +62,24 @@ func (m *Message) SummaryHashKey() string {
 
 // Summary is a collection of counters and recoreds
 type Summary struct {
-	Key               string     `json:"a"`           // hash key of SQL
-	SQL               string     `json:"b"`           // SQL template
-	SuccessCount      int        `json:"c"`           // success query number
-	FailedCount       int        `json:"d"`           // failed query number
-	LastSeen          int64      `json:"e"`           // the latest timestamp
-	SuccCostUsTotal   int64      `json:"f"`           // total cost of success query
-	FailedCostUsTotal int64      `json:"g"`           // total cost of failed query
-	NoGoodIndexUsed   int64      `json:"h"`           // count of SERVER_STATUS_NO_GOOD_INDEX_USED
-	NoIndexUsed       int64      `json:"i"`           // count of SERVER_STATUS_NO_INDEX_USED
-	QueryWasSlow      int64      `json:"j"`           // count of SERVER_QUERY_WAS_SLOW
-	QPS               *int       `json:"k,omitempty"` // qps
-	AverageLatency    *int       `json:"l,omitempty"` // average latency
-	MinLatency        *int       `json:"m,omitempty"` // min latency
-	MaxLatency        *int       `json:"n,omitempty"` // max latency
-	Latency99         *int       `json:"o,omitempty"` // latency of 99 quantile
-	Slow              []*Message `json:"p,omitempty"` // slow queries
-	AssemblyKey       string     `json:"q,omitempty"` // hash key for assembly
-	Sample            *Message   `json:"r,omitempty"` // one normal query sample
+	Key             string     `json:"a"`           // hash key of SQL
+	SQL             string     `json:"b"`           // SQL template
+	SuccessCount    int        `json:"c"`           // success query number
+	FailedCount     int        `json:"d"`           // failed query number
+	LastSeen        int64      `json:"e"`           // the latest timestamp
+	SuccCostTotal   float32    `json:"f"`           // total cost of success query
+	FailedCostTotal float32    `json:"g"`           // total cost of failed query
+	NoGoodIndexUsed int64      `json:"h"`           // count of SERVER_STATUS_NO_GOOD_INDEX_USED
+	NoIndexUsed     int64      `json:"i"`           // count of SERVER_STATUS_NO_INDEX_USED
+	QueryWasSlow    int64      `json:"j"`           // count of SERVER_QUERY_WAS_SLOW
+	QPS             *int       `json:"k,omitempty"` // qps
+	AverageLatency  *float32   `json:"l,omitempty"` // average latency in millisecond
+	MinLatency      *float32   `json:"m,omitempty"` // min latency in millisecond
+	MaxLatency      *float32   `json:"n,omitempty"` // max latency in millisecond
+	Latency99       *float32   `json:"o,omitempty"` // latency of 99 quantile in millisecond
+	Slow            []*Message `json:"p,omitempty"` // slow queries
+	AssemblyKey     string     `json:"q,omitempty"` // hash key for assembly
+	Sample          *Message   `json:"r,omitempty"` // one normal query sample
 }
 
 // AddMessage asseble a Message to this summary
@@ -96,10 +96,10 @@ func (s *Summary) AddMessage(m *Message, slow bool) bool {
 
 	if m.Err {
 		s.FailedCount++
-		s.FailedCostUsTotal += m.Latency
+		s.FailedCostTotal += m.Latency
 	} else {
 		s.SuccessCount++
-		s.SuccCostUsTotal += m.Latency
+		s.SuccCostTotal += m.Latency
 	}
 
 	if s.LastSeen < m.TimestampReq {
