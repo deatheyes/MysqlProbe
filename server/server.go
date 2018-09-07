@@ -29,7 +29,7 @@ func InitWebsocketEnv(config *config.Config) {
 		maxMessageSize = config.Websocket.MaxMessageSize * 1024
 	}
 
-	glog.Infof("intialize websocket env done, connect timeout: %v, write timeout: %v, ping timeout: %v, retry period: %v, max message size: %vk",
+	glog.Infof("intialize websocket env done, connect timeout: %v, write timeout: %v, ping timeout: %v, retry period: %v, max message size: %v",
 		connectTimeout, writeTimeout, pingTimeout, retryPeriod, maxMessageSize)
 }
 
