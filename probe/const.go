@@ -74,7 +74,7 @@ const (
 
 // probe
 const (
-	inputQueueLength = 2000            // stream input queue length
-	streamExpiration = 5 * time.Second // empty stream expiration
-	unknowDbName     = "unknown"       // unkonwn db name
+	inputQueueLength = 2000             // stream input queue length
+	streamExpiration = 30 * time.Second // empty stream expiration
+	unknowDbName     = "unknown"        // unkonwn db name
 )
