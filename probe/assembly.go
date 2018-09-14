@@ -106,6 +106,8 @@ func (s *MysqlStream) run() {
 							glog.V(6).Infof("[%v] parse handshake response done, uname: %v, dbname: %v", s.name, uname, dbname)
 							s.uname = uname
 							s.dbname = dbname
+							reqPacket = nil
+							rspPacket = nil
 							continue
 						}
 					}
@@ -151,6 +153,7 @@ func (s *MysqlStream) run() {
 					// not the packet concerned, continue
 					glog.V(8).Infof("[%v] receive unconcerned request packet", s.name)
 					reqPacket = nil
+					rspPacket = nil
 					continue
 				}
 			} else {
