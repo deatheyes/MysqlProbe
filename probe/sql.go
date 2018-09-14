@@ -4,8 +4,20 @@ import (
 	"github.com/deatheyes/sqlparser"
 )
 
-// TemplateFormatter replace all the const values to '?'
-func TemplateFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
+// templateFormatter replace all the const values to '?'
+func templateFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
+	if _, ok := node.(*sqlparser.FuncExpr); ok {
+		buf.WriteString(sqlparser.String(node))
+		return
+	}
+
+	if value, ok := node.(*sqlparser.ComparisonExpr); ok {
+		if value.Operator == sqlparser.InStr || value.Operator == sqlparser.NotInStr {
+			buf.Myprintf("%v %s ?", value.Left, value.Operator)
+			return
+		}
+	}
+
 	if value, ok := node.(*sqlparser.SQLVal); ok {
 		switch value.Type {
 		case sqlparser.ValArg:
@@ -13,15 +25,16 @@ func TemplateFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 		default:
 			buf.Myprintf("?")
 		}
-	} else {
-		node.Format(buf)
+		return
 	}
+
+	node.Format(buf)
 }
 
 func generateQuery(stmt sqlparser.Statement, template bool) string {
 	var buff *sqlparser.TrackedBuffer
 	if template {
-		buff = sqlparser.NewTrackedBuffer(TemplateFormatter)
+		buff = sqlparser.NewTrackedBuffer(templateFormatter)
 	} else {
 		buff = sqlparser.NewTrackedBuffer(nil)
 	}
