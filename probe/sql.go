@@ -28,6 +28,11 @@ func templateFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 		return
 	}
 
+	if _, ok := node.(*sqlparser.NullVal); ok {
+		buf.Myprintf("?")
+		return
+	}
+
 	node.Format(buf)
 }
 
