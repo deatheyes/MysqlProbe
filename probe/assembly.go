@@ -123,11 +123,10 @@ func (s *MysqlStream) run() {
 				}
 
 				// parse request and build message
-				msg = &message.Message{
-					TimestampReq: packet.Metadata().Timestamp.UnixNano(),
-					ServerIP:     s.localIP,
-					ClientIP:     s.clientIP,
-				}
+				msg = message.GetMessage()
+				msg.TimestampReq = packet.Metadata().Timestamp.UnixNano()
+				msg.ServerIP = s.localIP
+				msg.ClientIP = s.clientIP
 				switch reqPacket.CMD() {
 				case comQuery:
 					// this is a raw sql query
@@ -237,6 +236,10 @@ func (s *MysqlStream) run() {
 					glog.V(6).Infof("[%v] mysql query parsed done: %v", s.name, msg.SQL)
 
 					s.assembly.out <- msg
+				} else {
+					// recovery message
+					message.PutMessage(msg)
+					msg = nil
 				}
 				reqPacket = nil
 				rspPacket = nil
@@ -260,8 +263,11 @@ type Assembly struct {
 // Assemble send the packet to specify stream
 func (a *Assembly) Assemble(packet gopacket.Packet) {
 	key := Key{packet.NetworkLayer().NetworkFlow(), packet.TransportLayer().TransportFlow()}
-	var s *MysqlStream
-	s = a.streamMap[key]
+	reverse := Key{key.net.Reverse(), key.transport.Reverse()}
+	s := a.streamMap[key]
+	if s == nil {
+		s = a.streamMap[reverse]
+	}
 	if s == nil {
 		var serverIP, clientIP string
 		var serverPort, clientPort string
@@ -277,10 +283,8 @@ func (a *Assembly) Assemble(packet gopacket.Packet) {
 			clientPort = key.transport.Dst().String()
 		}
 
-		reverse := Key{key.net.Reverse(), key.transport.Reverse()}
 		s = newMysqlStream(a, serverIP, serverPort, clientIP, clientPort, key)
 		a.streamMap[key] = s
-		a.streamMap[reverse] = s
 	}
 	s.lastSeen = packet.Metadata().Timestamp
 	s.in <- packet
@@ -296,5 +300,5 @@ func (a *Assembly) CloseOlderThan(t time.Time) int {
 			delete(a.streamMap, k)
 		}
 	}
-	return count / 2
+	return count
 }

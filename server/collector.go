@@ -38,7 +38,7 @@ type Collector struct {
 	configChanged     bool                  // reload flag
 	qps               *util.RollingNumber   // qps caculator
 	latency           *util.RollingNumber   // latency caculator
-	latencyRange      *util.RollingRange    // latency range caculator
+	latencyRange      *util.Quantile        // latency range caculator
 	slowThreshold     int64                 // threshold to record slow querys
 
 	sync.Mutex
@@ -48,7 +48,7 @@ type Collector struct {
 func NewCollector(report chan<- []byte, reportPeriod time.Duration, slowThreshold int64, disableConnection bool) *Collector {
 	qps, _ := util.NewRollingNumber(10000, 100)
 	latency, _ := util.NewRollingNumber(10000, 100)
-	latencyRange := util.NewRollingRange(1000, time.Minute)
+	latencyRange := util.NewQuantile(time.Minute)
 	return &Collector{
 		clients:           make(map[*Client]bool),
 		clientAddrs:       make(map[string]*Client),
@@ -319,7 +319,7 @@ func (c *Collector) Run() {
 					dst := make([]byte, len(data))
 					c.report <- snappy.Encode(dst, data)
 				}
-				report = message.NewReport()
+				report.Reset()
 			}
 
 			// see if need to refresh the ticker

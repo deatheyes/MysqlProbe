@@ -113,6 +113,7 @@ func (p *Probe) Run() {
 	defer handle.Close()
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+	packetSource.NoCopy = true
 	for packet := range packetSource.Packets() {
 		if packet.NetworkLayer() == nil || packet.TransportLayer() == nil || packet.TransportLayer().LayerType() != layers.LayerTypeTCP {
 			glog.Warning("unexpected packet")

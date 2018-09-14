@@ -2,10 +2,10 @@ package util
 
 import (
 	"errors"
-	"math"
-	"sort"
 	"sync"
 	"time"
+
+	"github.com/bmizerany/perks/quantile"
 )
 
 type bucket struct {
@@ -150,143 +150,108 @@ func (n *RollingNumber) AverageInSecond(key string) int64 {
 	return n.Sum(key) * 1000 / n.timeInMilliseconds
 }
 
-type rangeRing struct {
-	list     []int64   // value ring
-	seq      []int     // pos sequence
-	pos      int       // next pos
-	size     int       // ring size mirror from RollingRange
-	pos99    int       // 99 quantile pos
-	lastseen time.Time // lastupdate time
+type quantileCell struct {
+	stream   *quantile.Stream
+	lastseen time.Time
 }
 
-func newRangeRing(size int) *rangeRing {
-	r := &rangeRing{
-		list: make([]int64, size),
-		seq:  make([]int, size),
-		pos:  0,
-		size: size,
+func newQuantileCell() *quantileCell {
+	return &quantileCell{
+		stream: quantile.NewTargeted(0.001, 0.99, 0.999),
 	}
-	if r.size < 0 {
-		r.size = 1
-	}
-	r.pos99 = int(math.Ceil(float64(r.size)*0.99)) - 1
-	for i := 0; i < r.size; i++ {
-		r.seq[i] = i
-	}
-	return r
 }
 
-func (r *rangeRing) getValueBySeq(seq int) int64 {
-	return r.list[seq]
+func (q *quantileCell) min() int64 {
+	return int64(q.stream.Query(0.001))
 }
 
-func (r *rangeRing) Len() int {
-	return r.size
+func (q *quantileCell) max() int64 {
+	return int64(q.stream.Query(0.999))
 }
 
-func (r *rangeRing) Less(i, j int) bool {
-	return r.getValueBySeq(r.seq[i]) < r.getValueBySeq(r.seq[j])
+func (q *quantileCell) r99() int64 {
+	return int64(q.stream.Query(0.99))
 }
 
-func (r *rangeRing) Swap(i, j int) {
-	r.seq[i], r.seq[j] = r.seq[j], r.seq[i]
+func (q *quantileCell) add(v int64) {
+	q.lastseen = time.Now()
+	q.stream.Insert(float64(v))
 }
 
-func (r *rangeRing) min() int64 {
-	return r.getValueBySeq(r.seq[0])
-}
-
-func (r *rangeRing) max() int64 {
-	return r.getValueBySeq(r.seq[r.size-1])
-}
-
-func (r *rangeRing) r99() int64 {
-	return r.getValueBySeq(r.seq[r.pos99])
-}
-
-func (r *rangeRing) add(value int64) {
-	r.list[r.pos] = value
-	sort.Sort(r)
-	r.pos = (r.pos + 1) % r.size
-	r.lastseen = time.Now()
-}
-
-// RollingRange track the range info in time
-type RollingRange struct {
-	size       int                   // ring size
-	rings      map[string]*rangeRing // value ring
-	expiration time.Duration         // key expiration time
+// Quantile track the min, max and quantile
+type Quantile struct {
+	streams    map[string]*quantileCell // quantile map
+	expiration time.Duration            // key expiration time
 	sync.RWMutex
 }
 
-// NewRollingRange create a RollingRange object
-func NewRollingRange(size int, expiration time.Duration) *RollingRange {
-	r := &RollingRange{
-		size:       size,
-		rings:      make(map[string]*rangeRing),
+// NewQuantile create a quantile map
+func NewQuantile(expiration time.Duration) *Quantile {
+	q := &Quantile{
+		streams:    make(map[string]*quantileCell),
 		expiration: expiration,
 	}
-	go r.run()
-	return r
+	go q.run()
+	return q
 }
 
-const interval = time.Second
+const interval = time.Second * 10
 
-func (r *RollingRange) run() {
-	ticker := time.NewTicker(interval)
+func (q *Quantile) run() {
+	ticker := time.NewTimer(interval)
+	defer ticker.Stop()
+
 	for {
 		<-ticker.C
-		r.Lock()
-		for k, v := range r.rings {
-			if time.Now().Sub(v.lastseen) > r.expiration {
-				delete(r.rings, k)
+		q.Lock()
+		for k, v := range q.streams {
+			if time.Now().Sub(v.lastseen) > q.expiration {
+				delete(q.streams, k)
 			}
 		}
-		r.Unlock()
+		q.Unlock()
 	}
 }
 
 // Add add the value to a ring specified by the key
-func (r *RollingRange) Add(key string, value int64) {
-	r.RLock()
-	defer r.RUnlock()
+func (q *Quantile) Add(key string, value int64) {
+	q.RLock()
+	defer q.RUnlock()
 
-	if r.rings[key] == nil {
-		r.rings[key] = newRangeRing(r.size)
+	if q.streams[key] == nil {
+		q.streams[key] = newQuantileCell()
 	}
-	r.rings[key].add(value)
+	q.streams[key].add(value)
 }
 
 // Min return the lower boundary of a ring specified by the key
-func (r *RollingRange) Min(key string) int64 {
-	r.RLock()
-	defer r.RUnlock()
+func (q *Quantile) Min(key string) int64 {
+	q.RLock()
+	defer q.RUnlock()
 
-	if r.rings[key] == nil {
+	if q.streams[key] == nil {
 		return 0
 	}
-	return r.rings[key].min()
+	return q.streams[key].min()
 }
 
-// Max return the uppper boundary of a ring specified by the key
-func (r *RollingRange) Max(key string) int64 {
-	r.RLock()
-	defer r.RUnlock()
+// Max return the upper boundary of a ring specified by the key
+func (q *Quantile) Max(key string) int64 {
+	q.RLock()
+	defer q.RUnlock()
 
-	if r.rings[key] == nil {
+	if q.streams[key] == nil {
 		return 0
 	}
-	return r.rings[key].max()
+	return q.streams[key].max()
 }
 
-// R99 return the value of 99 quantile
-func (r *RollingRange) R99(key string) int64 {
-	if r.size == 0 {
-		return 0
-	}
+func (q *Quantile) R99(key string) int64 {
+	q.RLock()
+	defer q.RUnlock()
 
-	if r.rings[key] == nil {
+	if q.streams[key] == nil {
 		return 0
 	}
-	return r.rings[key].r99()
+	return q.streams[key].r99()
 }
