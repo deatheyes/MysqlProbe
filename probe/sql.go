@@ -6,8 +6,8 @@ import (
 
 // templateFormatter replace all the const values to '?'
 func templateFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
-	if _, ok := node.(*sqlparser.FuncExpr); ok {
-		buf.WriteString(sqlparser.String(node))
+	if f, ok := node.(*sqlparser.FuncExpr); ok {
+		buf.Myprintf("%s(...)", f.Name.String())
 		return
 	}
 
