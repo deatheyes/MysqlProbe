@@ -5,8 +5,8 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/golang/glog"
 	"github.com/deatheyes/sqlparser"
+	"github.com/golang/glog"
 
 	"github.com/deatheyes/MysqlProbe/util"
 )
@@ -364,7 +364,7 @@ func (p *MysqlBasePacket) parseHandShakeResponse41(capabilities uint32) (uname s
 }
 
 func (p *MysqlBasePacket) parseHandShakeResponse() (uname string, dbname string, err error) {
-	capabilities := uint32(p.Data[0]) | uint32(p.Data[1])<<8 | uint32(p.Data[2])<<16 | uint32(p.Data[3])<<24
+	capabilities := uint32(binary.LittleEndian.Uint16(p.Data[:2]))
 	if capabilities&clientProtocol41 == 0 {
 		return p.parseHandShakeResponse320(capabilities)
 	}

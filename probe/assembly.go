@@ -2,6 +2,7 @@ package probe
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/golang/glog"
@@ -108,6 +109,9 @@ func (s *MysqlStream) run() {
 							s.dbname = dbname
 							reqPacket = nil
 							rspPacket = nil
+							if len(stmtmap) > 0 {
+								stmtmap = make(map[uint32]string)
+							}
 							continue
 						}
 					}
@@ -129,6 +133,10 @@ func (s *MysqlStream) run() {
 				msg.TimestampReq = packet.Metadata().Timestamp.UnixNano()
 				msg.ServerIP = s.localIP
 				msg.ClientIP = s.clientIP
+				port, _ := strconv.Atoi(s.clientPort)
+				msg.ClientPort = uint16(port)
+				port, _ = strconv.Atoi(s.localPort)
+				msg.ServerPort = uint16(port)
 				switch reqPacket.CMD() {
 				case comQuery:
 					// this is a raw sql query
