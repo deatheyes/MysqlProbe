@@ -100,6 +100,7 @@ func (s *MysqlStream) run() {
 	waitting := false                  // if there is a request packet parsed
 	var msg *message.Message
 	var err error
+	handshake := false
 	for {
 		select {
 		case packet := <-s.in:
@@ -121,7 +122,7 @@ func (s *MysqlStream) run() {
 				}
 
 				// parse handshake response
-				if basePacket.Seq() == 1 {
+				if handshake && basePacket.Seq() == 1 {
 					// this packet should be a handshake response
 					uname, dbname, err := basePacket.parseHandShakeResponse()
 					if err != nil {
@@ -135,6 +136,7 @@ func (s *MysqlStream) run() {
 						if len(stmtmap) > 0 {
 							stmtmap = make(map[uint32]string)
 						}
+						handshake = false
 					}
 					continue
 				}
@@ -192,6 +194,11 @@ func (s *MysqlStream) run() {
 				// which should only be the first part of tcp payload regardless of what the tcp packet seq is.
 				if _, err = basePacket.DecodeFromBytes(tcp.Payload); err != nil {
 					glog.V(6).Infof("[%v] parse response base packet failed: %v", s.name, err)
+					continue
+				}
+
+				if basePacket.Seq() == 1 {
+					handshake = true
 					continue
 				}
 
