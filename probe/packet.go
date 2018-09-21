@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 
 	"github.com/deatheyes/sqlparser"
 	"github.com/golang/glog"
@@ -85,35 +86,7 @@ func (p *MysqlRequestPacket) CMD() byte {
 
 // MysqlResponsePacket retains the infomation about the response packet of query
 type MysqlResponsePacket struct {
-	seq    byte
-	status *MysqlResponseStatus
-}
-
-// Seq return the sequence id in header
-func (p *MysqlResponsePacket) Seq() uint8 {
-	return uint8(p.seq)
-}
-
-// Stmt return nil just for interface compatiblility
-func (p *MysqlResponsePacket) Stmt() sqlparser.Statement {
-	return nil
-}
-
-// Status return the extend infomation of OK and Err
-func (p *MysqlResponsePacket) Status() *MysqlResponseStatus {
-	return p.status
-}
-
-// StmtID return the statement id of a prepare request; return 0 for compatiblility
-func (p *MysqlResponsePacket) StmtID() uint32 {
-	if p.status != nil {
-		return p.status.stmtID
-	}
-	return 0
-}
-
-// MysqlResponseStatus retains parts of the query response data
-type MysqlResponseStatus struct {
+	seq          byte
 	flag         byte
 	affectedRows uint64
 	insertID     uint64
@@ -124,9 +97,9 @@ type MysqlResponseStatus struct {
 }
 
 // ParseRequestPacket filter out the query packet
-func (p *MysqlBasePacket) ParseRequestPacket() (*MysqlRequestPacket, error) {
+func (p *MysqlBasePacket) ParseRequestPacket(packet *MysqlRequestPacket) error {
 	if len(p.Data) < 2 {
-		return nil, errNotEnouthData
+		return errNotEnouthData
 	}
 
 	switch p.Data[0] {
@@ -134,27 +107,45 @@ func (p *MysqlBasePacket) ParseRequestPacket() (*MysqlRequestPacket, error) {
 		stmt, err := sqlparser.Parse(string(p.Data[1:]))
 		if err != nil || stmt == nil {
 			glog.V(6).Infof("possible not a request packet, prase statement failed: %v", err)
-			return nil, errParsedFailed
+			return errParsedFailed
 		}
-		return &MysqlRequestPacket{seq: p.Seq(), cmd: comQuery, sql: p.Data[1:], stmt: stmt}, nil
+		packet.seq = p.Seq()
+		if v, ok := stmt.(*sqlparser.Use); ok {
+			// use dbname
+			packet.cmd = comInitDB
+			packet.dbname = v.DBName.String()
+			return nil
+		}
+		packet.cmd = comQuery
+		packet.sql = p.Data[1:]
+		packet.stmt = stmt
+		return nil
 	case comStmtPrepare:
-		return &MysqlRequestPacket{seq: p.Seq(), cmd: comStmtPrepare, sql: p.Data[1:]}, nil
+		packet.seq = p.Seq()
+		packet.cmd = comStmtPrepare
+		packet.sql = p.Data[1:]
+		return nil
 	case comStmtExecute:
 		// we only care about the statement id currently
 		if len(p.Data) < 5 {
-			return nil, errNotEnouthData
+			return errNotEnouthData
 		}
-		stmtID := uint32(p.Data[1]) | uint32(p.Data[2])<<8 | uint32(p.Data[3])<<16 | uint32(p.Data[4])<<24
-		return &MysqlRequestPacket{seq: p.Seq(), cmd: comStmtExecute, stmtID: stmtID}, nil
+		packet.seq = p.Seq()
+		packet.cmd = comStmtExecute
+		packet.stmtID = uint32(p.Data[1]) | uint32(p.Data[2])<<8 | uint32(p.Data[3])<<16 | uint32(p.Data[4])<<24
+		return nil
 	case comInitDB:
-		return &MysqlRequestPacket{seq: p.Seq(), cmd: comInitDB, dbname: string(p.Data[1:])}, nil
+		packet.seq = p.Seq()
+		packet.cmd = comInitDB
+		packet.dbname = string(p.Data[1:])
+		return nil
 	default:
-		return nil, errParsedFailed
+		return errParsedFailed
 	}
 }
 
 // ParseResponsePacket distinguish OK packet, Err packet and Result set Packet
-func (p *MysqlBasePacket) ParseResponsePacket(reqType byte) (_ *MysqlResponsePacket, err error) {
+func (p *MysqlBasePacket) ParseResponsePacket(reqType byte, packet *MysqlResponsePacket) (err error) {
 	// possible panic while processing length encoding, reover
 	defer func() {
 		if r := recover(); r != nil {
@@ -164,99 +155,98 @@ func (p *MysqlBasePacket) ParseResponsePacket(reqType byte) (_ *MysqlResponsePac
 	}()
 
 	if len(p.Data) < 1 {
-		return nil, errNotEnouthData
+		return errNotEnouthData
 	}
 	switch reqType {
 	case comQuery:
-		return p.parseResultSetHeader()
+		return p.parseResultSetHeader(packet)
 	case comStmtPrepare:
-		return p.parsePrepare()
+		return p.parsePrepare(packet)
 	case comStmtExecute:
-		return p.parseResultSetHeader()
+		return p.parseResultSetHeader(packet)
+	case comInitDB:
+		return p.parseResultSetHeader(packet)
 	default:
-		return nil, errParsedFailed
+		return errParsedFailed
 	}
 }
 
-func (p *MysqlBasePacket) parsePrepareOK() (*MysqlResponsePacket, error) {
-	status := &MysqlResponseStatus{flag: p.Data[0]}
+func (p *MysqlBasePacket) parsePrepareOK(packet *MysqlResponsePacket) error {
+	packet.flag = p.Data[0]
 	if len(p.Data) != 12 {
-		return nil, errParsedFailed
+		return errParsedFailed
 	}
-	status.stmtID = binary.LittleEndian.Uint32(p.Data[1:5])
-	return &MysqlResponsePacket{seq: p.Seq(), status: status}, nil
+	packet.stmtID = binary.LittleEndian.Uint32(p.Data[1:5])
+	return nil
 }
 
-func (p *MysqlBasePacket) parseOK() (*MysqlResponsePacket, error) {
+func (p *MysqlBasePacket) parseOK(packet *MysqlResponsePacket) error {
 	var n, m int
-	status := &MysqlResponseStatus{flag: p.Data[0]}
+	packet.flag = p.Data[0]
 	// OK packet with extend info
-	status.affectedRows, _, n = util.ReadLengthEncodedInteger(p.Data[1:])
-	status.insertID, _, m = util.ReadLengthEncodedInteger(p.Data[1+n:])
-	status.status = util.ReadStatus(p.Data[1+n+m : 1+n+m+2])
-	return &MysqlResponsePacket{seq: p.Seq(), status: status}, nil
+	packet.affectedRows, _, n = util.ReadLengthEncodedInteger(p.Data[1:])
+	packet.insertID, _, m = util.ReadLengthEncodedInteger(p.Data[1+n:])
+	packet.status = util.ReadStatus(p.Data[1+n+m : 1+n+m+2])
+	return nil
 }
 
-func (p *MysqlBasePacket) parseErr() (*MysqlResponsePacket, error) {
-	status := &MysqlResponseStatus{flag: p.Data[0]}
-	status.errno = binary.LittleEndian.Uint16(p.Data[1:3])
+func (p *MysqlBasePacket) parseErr(packet *MysqlResponsePacket) error {
+	packet.flag = p.Data[0]
+	packet.errno = binary.LittleEndian.Uint16(p.Data[1:3])
 	pos := 3
 	// SQL State [optional: # + 5bytes string]
 	if p.Data[3] == 0x23 {
 		//sqlstate := string(data[4 : 4+5])
 		pos = 9
 	}
-	status.message = string(p.Data[pos:])
-	return &MysqlResponsePacket{seq: p.Seq(), status: status}, nil
+	packet.message = string(p.Data[pos:])
+	return nil
 }
 
-func (p *MysqlBasePacket) parseLocalInFile() (*MysqlResponsePacket, error) {
-	return &MysqlResponsePacket{seq: p.Seq(), status: &MysqlResponseStatus{flag: p.Data[0]}}, nil
+func (p *MysqlBasePacket) parseLocalInFile(packet *MysqlResponsePacket) error {
+	packet.seq = p.Seq()
+	packet.flag = p.Data[0]
+	return nil
 }
 
-func (p *MysqlBasePacket) parseResultSetHeader() (*MysqlResponsePacket, error) {
+func (p *MysqlBasePacket) parseResultSetHeader(packet *MysqlResponsePacket) error {
 	switch p.Data[0] {
 	case iOK:
-		return p.parseOK()
+		return p.parseOK(packet)
 	case iERR:
-		return p.parseErr()
+		return p.parseErr(packet)
 	case iLocalInFile:
-		return p.parseLocalInFile()
+		return p.parseLocalInFile(packet)
 	}
 
 	// column count
 	_, _, n := util.ReadLengthEncodedInteger(p.Data)
 	if n-len(p.Data) == 0 {
-		return &MysqlResponsePacket{seq: p.Seq(), status: &MysqlResponseStatus{flag: p.Data[0]}}, nil
+		packet.seq = p.Seq()
+		packet.flag = p.Data[0]
+		return nil
 	}
-	return nil, errParsedFailed
+	return errParsedFailed
 }
 
-func (p *MysqlBasePacket) parsePrepare() (*MysqlResponsePacket, error) {
+func (p *MysqlBasePacket) parsePrepare(packet *MysqlResponsePacket) error {
 	switch p.Data[0] {
 	case iOK:
-		return p.parsePrepareOK()
+		return p.parsePrepareOK(packet)
 	case iERR:
-		return p.parseErr()
+		return p.parseErr(packet)
 	default:
-		return nil, errParsedFailed
+		return errParsedFailed
 	}
 }
 
 // https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse
 func (p *MysqlBasePacket) parseHandShakeResponse320(capabilities uint32) (uname string, dbname string, err error) {
 	pos := 2 + 3
-	if len(p.Data) < pos {
-		err = errNotEnouthData
-		glog.Warningf("[handshake response320] unexpected data length: %v", len(p.Data))
-		return
-	}
-
 	// uname string[0x00]
 	unameEndIndex := bytes.IndexByte(p.Data[pos:], 0x00)
 	if unameEndIndex < 0 {
-		err = errNotEnouthData
-		glog.Warning("[handshake response320] failed in parsing uname")
+		err = errors.New("[handshake response320] failed in parsing uname")
 		return
 	}
 	uname = string(p.Data[pos : pos+unameEndIndex])
@@ -266,8 +256,7 @@ func (p *MysqlBasePacket) parseHandShakeResponse320(capabilities uint32) (uname 
 		// auth response string[0x00]
 		authEndIndex := bytes.IndexByte(p.Data[pos:], 0x00)
 		if authEndIndex < 0 {
-			err = errNotEnouthData
-			glog.Warning("[handshake response320] failed in parsing auth response")
+			err = errors.New("[handshake response320] failed in parsing auth response")
 			return
 		}
 		pos += authEndIndex + 1
@@ -275,8 +264,7 @@ func (p *MysqlBasePacket) parseHandShakeResponse320(capabilities uint32) (uname 
 		// dbname string[0x00]
 		dbnameEndIndex := bytes.IndexByte(p.Data[pos:], 0x00)
 		if dbnameEndIndex < 0 {
-			err = errNotEnouthData
-			glog.Warning("[handshake response320] failed in parsing dbname")
+			err = errors.New("[handshake response320] failed in parsing dbname")
 			return
 		}
 		dbname = string(p.Data[pos : pos+dbnameEndIndex])
@@ -290,16 +278,14 @@ func (p *MysqlBasePacket) parseHandShakeResponse320(capabilities uint32) (uname 
 func (p *MysqlBasePacket) parseHandShakeResponse41(capabilities uint32) (uname string, dbname string, err error) {
 	pos := 4 + 4 + 1 + 23
 	if len(p.Data) < pos {
-		err = errNotEnouthData
-		glog.Warningf("[handshake response41] unexpected data length: %v", len(p.Data))
+		err = fmt.Errorf("[handshake response41] unexpected data length: %v", len(p.Data))
 		return
 	}
 
 	// uname string[0x00]
 	unameEndIndex := bytes.IndexByte(p.Data[pos:], 0x00)
 	if unameEndIndex < 0 {
-		err = errNotEnouthData
-		glog.Warning("[handshake response41] failed in parsing uname")
+		err = errors.New("[handshake response41] failed in parsing uname")
 		return
 	}
 	uname = string(p.Data[pos : pos+unameEndIndex])
@@ -310,8 +296,7 @@ func (p *MysqlBasePacket) parseHandShakeResponse41(capabilities uint32) (uname s
 		pluginInfoLength, _, m := util.ReadLengthEncodedInteger(p.Data[pos:])
 		pos += m + int(pluginInfoLength)
 		if pos > len(p.Data) {
-			glog.Warning("[handshake response41] failed in parsing clientPluginAuth")
-			err = errNotEnouthData
+			err = errors.New("[handshake response41] failed in parsing clientPluginAuth")
 			return
 		}
 	} else if capabilities&clientSecureConn != 0 {
@@ -319,16 +304,14 @@ func (p *MysqlBasePacket) parseHandShakeResponse41(capabilities uint32) (uname s
 		secureInfoLength, _, m := util.ReadLengthEncodedInteger(p.Data[pos:])
 		pos += m + int(secureInfoLength)
 		if pos > len(p.Data) {
-			glog.Warning("[handshake response41] failed in parsing clientSecureConn")
-			err = errNotEnouthData
+			err = errors.New("[handshake response41] failed in parsing clientSecureConn")
 			return
 		}
 	} else {
 		// auth response string[0x00]
 		stringEndIndex := bytes.IndexByte(p.Data[pos:], 0x00)
 		if stringEndIndex < 0 {
-			glog.Warning("[handshake response41] failed in parsing auth-response")
-			err = errNotEnouthData
+			err = errors.New("[handshake response41] failed in parsing auth-response")
 			return
 		}
 		pos += stringEndIndex + 1
@@ -338,8 +321,7 @@ func (p *MysqlBasePacket) parseHandShakeResponse41(capabilities uint32) (uname s
 		// dbname string[0x00]
 		dbnameEndIndex := bytes.IndexByte(p.Data[pos:], 0x00)
 		if dbnameEndIndex < 0 {
-			glog.Warning("[handshake response41] failed in parsing dbname")
-			err = errNotEnouthData
+			err = errors.New("[handshake response41] failed in parsing dbname")
 			return
 		}
 		dbname = string(p.Data[pos : pos+dbnameEndIndex])
@@ -350,8 +332,7 @@ func (p *MysqlBasePacket) parseHandShakeResponse41(capabilities uint32) (uname s
 		// client plugin auth string[0x00]
 		pluginAuthEndIndex := bytes.IndexByte(p.Data[pos:], 0x00)
 		if pluginAuthEndIndex < 0 {
-			glog.Warning("[handshake response41] failed in parsing auth plugin name")
-			err = errNotEnouthData
+			err = errors.New("[handshake response41] failed in parsing auth plugin name")
 			return
 		}
 		pos += pluginAuthEndIndex + 1
@@ -359,14 +340,20 @@ func (p *MysqlBasePacket) parseHandShakeResponse41(capabilities uint32) (uname s
 
 	// TODO: parse client connect attributes, which we don't need currently
 	/*if capabilities&clientConnectAttrs != 0 {
-	  }*/
+	}*/
 	return
 }
 
 func (p *MysqlBasePacket) parseHandShakeResponse() (uname string, dbname string, err error) {
-	capabilities := uint32(binary.LittleEndian.Uint16(p.Data[:2]))
+	if len(p.Data) < 5 {
+		err = errNotEnouthData
+		return
+	}
+
+	capabilities := uint32(p.Data[0]) | uint32(p.Data[1])<<8
 	if capabilities&clientProtocol41 == 0 {
 		return p.parseHandShakeResponse320(capabilities)
 	}
+	capabilities = capabilities | uint32(p.Data[2])<<16 | uint32(p.Data[3])<<24
 	return p.parseHandShakeResponse41(capabilities)
 }

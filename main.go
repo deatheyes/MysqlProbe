@@ -30,7 +30,7 @@ func showVersion() {
 func init() {
 	flag.StringVar(&configfile, "c", "./conf/config.yaml", "yaml `config` file path")
 	flag.BoolVar(&version, "version", false, "show version")
-	glog.MaxSize = 1 << 30
+	glog.MaxSize = 1 << 28
 }
 
 func main() {
