@@ -38,7 +38,7 @@ type Collector struct {
 	configChanged     bool                  // reload flag
 	qps               *util.RollingNumber   // qps caculator
 	latency           *util.RollingNumber   // latency caculator
-	latencyRange      *util.Quantile        // latency range caculator
+	latencyRange      *util.QuantileGroup   // latency range caculator
 	slowThreshold     int64                 // threshold to record slow querys
 
 	sync.Mutex
@@ -48,7 +48,7 @@ type Collector struct {
 func NewCollector(report chan<- []byte, reportPeriod time.Duration, slowThreshold int64, disableConnection bool) *Collector {
 	qps, _ := util.NewRollingNumber(10000, 100)
 	latency, _ := util.NewRollingNumber(10000, 100)
-	latencyRange := util.NewQuantile(time.Minute)
+	latencyRange := util.NewQuantileGroup(time.Minute, 1000)
 	return &Collector{
 		clients:           make(map[*Client]bool),
 		clientAddrs:       make(map[string]*Client),
@@ -302,9 +302,10 @@ func (c *Collector) Run() {
 						s.MinLatency = new(float32)
 						s.MaxLatency = new(float32)
 						s.Latency99 = new(float32)
-						*s.MinLatency = float32(c.latencyRange.Min(s.AssemblyKey)) / 1000
-						*s.MaxLatency = float32(c.latencyRange.Max(s.AssemblyKey)) / 1000
-						*s.Latency99 = float32(c.latencyRange.R99(s.AssemblyKey)) / 1000
+						min, max, q99 := c.latencyRange.Get(s.AssemblyKey)
+						*s.MinLatency = float32(min) / 1000
+						*s.MaxLatency = float32(max) / 1000
+						*s.Latency99 = float32(q99) / 1000
 					}
 				}
 			}

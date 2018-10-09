@@ -197,7 +197,7 @@ func (s *MysqlStream) run() {
 					continue
 				}
 
-				if basePacket.Seq() == 1 {
+				if basePacket.Seq() == 0 {
 					handshake = true
 					continue
 				}

@@ -2,10 +2,9 @@ package util
 
 import (
 	"errors"
+	"math"
 	"sync"
 	"time"
-
-	"github.com/bmizerany/perks/quantile"
 )
 
 type bucket struct {
@@ -150,108 +149,187 @@ func (n *RollingNumber) AverageInSecond(key string) int64 {
 	return n.Sum(key) * 1000 / n.timeInMilliseconds
 }
 
-type quantileCell struct {
-	stream   *quantile.Stream
-	lastseen time.Time
+type point struct {
+	value     int64
+	timestamp time.Time
 }
 
-func newQuantileCell() *quantileCell {
-	return &quantileCell{
-		stream: quantile.NewTargeted(0.001, 0.99, 0.999),
+type quantile struct {
+	values     []point // ring buffer
+	ids        []int   // sort helper
+	lastseen   time.Time
+	lastupdate time.Time
+	head       int
+	tail       int
+	size       int
+	min        int64
+	max        int64
+	q99        int64
+}
+
+func newQuantile(size int) *quantile {
+	return &quantile{
+		values: make([]point, size),
+		ids:    make([]int, size),
+		head:   0,
+		tail:   0,
+		size:   size,
 	}
+
 }
 
-func (q *quantileCell) min() int64 {
-	return int64(q.stream.Query(0.001))
-}
-
-func (q *quantileCell) max() int64 {
-	return int64(q.stream.Query(0.999))
-}
-
-func (q *quantileCell) r99() int64 {
-	return int64(q.stream.Query(0.99))
-}
-
-func (q *quantileCell) add(v int64) {
+func (q *quantile) add(value int64) {
+	q.values[q.tail].value = value
 	q.lastseen = time.Now()
-	q.stream.Insert(float64(v))
-}
+	q.values[q.tail].timestamp = q.lastseen
 
-// Quantile track the min, max and quantile
-type Quantile struct {
-	streams    map[string]*quantileCell // quantile map
-	expiration time.Duration            // key expiration time
-	sync.RWMutex
-}
-
-// NewQuantile create a quantile map
-func NewQuantile(expiration time.Duration) *Quantile {
-	q := &Quantile{
-		streams:    make(map[string]*quantileCell),
-		expiration: expiration,
+	q.tail = (q.tail + 1) % q.size
+	if q.tail == q.head {
+		q.head = (q.head + 1) % q.size
 	}
-	go q.run()
-	return q
+}
+
+func (q *quantile) get() (mint int64, max int64, q99 int64) {
+	if time.Now().Sub(q.lastupdate) > interval {
+		q.caculate()
+	}
+	return q.min, q.max, q.q99
+}
+
+func (q *quantile) rank(left, right, rank int) {
+	if rank == 0 || left >= right {
+		q.q99 = q.values[q.ids[left]].value
+		return
+	}
+
+	p := q.ids[left]
+	v := q.values[p].value
+	i := left
+	j := right
+	for i < j {
+		for i < j && q.values[q.ids[i]].value >= v {
+			j--
+		}
+		q.ids[i] = q.ids[j]
+
+		for i < j && q.values[q.ids[j]].value <= v {
+			i++
+		}
+		q.ids[j] = q.ids[i]
+	}
+	q.ids[i] = p
+
+	if i < rank {
+		q.rank(i+1, right, rank-i-1)
+	} else if i > rank {
+		q.rank(left, i-1, rank)
+	} else {
+		q.q99 = q.values[p].value
+	}
+}
+
+func (q *quantile) caculate() {
+	timestamp := time.Now()
+	q.lastupdate = timestamp
+	flag := false
+	count := 0
+	len := 0
+	for i := q.head; i != q.tail; i = (i + 1) % q.size {
+		if q.values[i].timestamp.Add(interval).Before(timestamp) {
+			q.values[q.head].value = 0
+			q.head = (q.head + 1) % q.size
+			continue
+		}
+
+		q.ids[len] = i
+		len++
+
+		if !flag {
+			flag = true
+			if q.head >= q.tail {
+				count = q.size - q.head + q.tail
+			} else {
+				count = q.tail - q.head
+			}
+
+			if count == 0 {
+				q.min = 0
+				q.max = 0
+				q.q99 = 0
+				return
+			}
+			count = int(math.Ceil(float64(count) * 0.99))
+
+			q.max = q.values[i].value
+			q.min = q.values[i].value
+		}
+
+		if q.values[i].value < q.min {
+			q.min = q.values[i].value
+		}
+		if q.values[i].value >= q.max {
+			q.max = q.values[i].value
+		}
+	}
+
+	q.rank(0, len-1, count-1)
+}
+
+// QuantileGroup caculate the 99 quantile, min and max
+type QuantileGroup struct {
+	group      map[string]*quantile
+	expiration time.Duration
+	size       int
+	sync.Mutex
+}
+
+// NewQuantileGroup create a QuantileGroup
+func NewQuantileGroup(expiration time.Duration, size int) *QuantileGroup {
+	g := &QuantileGroup{
+		group:      make(map[string]*quantile),
+		expiration: expiration,
+		size:       size,
+	}
+	go g.run()
+	return g
 }
 
 const interval = time.Second * 10
 
-func (q *Quantile) run() {
-	ticker := time.NewTimer(interval)
-	defer ticker.Stop()
-
+func (g *QuantileGroup) run() {
+	ticker := time.NewTicker(g.expiration)
 	for {
 		<-ticker.C
-		q.Lock()
-		for k, v := range q.streams {
-			if time.Now().Sub(v.lastseen) > q.expiration {
-				delete(q.streams, k)
+		timestamp := time.Now()
+
+		g.Lock()
+		for k, v := range g.group {
+			if v.lastseen.Add(g.expiration).Before(timestamp) {
+				delete(g.group, k)
 			}
 		}
-		q.Unlock()
+		g.Unlock()
 	}
 }
 
-// Add add the value to a ring specified by the key
-func (q *Quantile) Add(key string, value int64) {
-	q.RLock()
-	defer q.RUnlock()
+// Add record one point
+func (g *QuantileGroup) Add(key string, value int64) {
+	g.Lock()
+	defer g.Unlock()
 
-	if q.streams[key] == nil {
-		q.streams[key] = newQuantileCell()
+	if _, ok := g.group[key]; !ok {
+		g.group[key] = newQuantile(g.size)
 	}
-	q.streams[key].add(value)
+	g.group[key].add(value)
 }
 
-// Min return the lower boundary of a ring specified by the key
-func (q *Quantile) Min(key string) int64 {
-	q.RLock()
-	defer q.RUnlock()
+// Get retrive min, max and q99
+func (g *QuantileGroup) Get(key string) (mint int64, max int64, q99 int64) {
+	g.Lock()
+	defer g.Unlock()
 
-	if q.streams[key] == nil {
-		return 0
+	if _, ok := g.group[key]; !ok {
+		return 0, 0, 0
 	}
-	return q.streams[key].min()
-}
-
-// Max return the upper boundary of a ring specified by the key
-func (q *Quantile) Max(key string) int64 {
-	q.RLock()
-	defer q.RUnlock()
-
-	if q.streams[key] == nil {
-		return 0
-	}
-	return q.streams[key].max()
-}
-
-func (q *Quantile) R99(key string) int64 {
-	q.RLock()
-	defer q.RUnlock()
-
-	if q.streams[key] == nil {
-		return 0
-	}
-	return q.streams[key].r99()
+	return g.group[key].get()
 }
