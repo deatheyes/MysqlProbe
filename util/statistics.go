@@ -207,12 +207,12 @@ func (q *quantile) rank(left, right, rank int) {
 	i := left
 	j := right
 	for i < j {
-		for i < j && q.values[q.ids[i]].value >= v {
+		for i < j && q.values[q.ids[j]].value >= v {
 			j--
 		}
 		q.ids[i] = q.ids[j]
 
-		for i < j && q.values[q.ids[j]].value <= v {
+		for i < j && q.values[q.ids[i]].value <= v {
 			i++
 		}
 		q.ids[j] = q.ids[i]
