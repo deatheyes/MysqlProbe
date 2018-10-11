@@ -50,7 +50,6 @@ type ConnectionWatcher struct {
 	Uname    string `yaml:"uname"`
 	Password string `yaml:"password"`
 	Sock     string `yaml:"sock"`
-	DBname   string `yaml:"dbname"`
 }
 
 // Websocket is the config of websocket client and server

@@ -26,27 +26,25 @@ type ConnectionWatcher struct {
 	uname      string                       // db user name
 	passward   string                       // db passward
 	sock       string                       // db domain socket path
-	dbname     string                       // db name
 	lastupdate time.Time                    // update time
 	lastbytes  []byte                       // byte for comparision
 	sync.RWMutex
 }
 
 // NewConnectionWatcher create a instance of connection watcher
-func NewConnectionWatcher(uname, passward, sock, dbname string) *ConnectionWatcher {
+func NewConnectionWatcher(uname, passward, sock string) *ConnectionWatcher {
 	w := &ConnectionWatcher{
 		infoMap:  make(map[string]*DBConnectionInfo),
 		uname:    uname,
 		passward: passward,
 		sock:     sock,
-		dbname:   dbname,
 	}
 	w.init()
 	return w
 }
 
 func (w *ConnectionWatcher) update() {
-	m, err := GetMysqlConnectionInfo(w.uname, w.passward, w.sock, w.dbname)
+	m, err := GetMysqlConnectionInfo(w.uname, w.passward, w.sock)
 	if err != nil {
 		glog.Warningf("[watcher] get connection info failed: %v", err)
 	}
@@ -108,8 +106,8 @@ func (i *DBConnectionInfo) key() (buffer []byte) {
 }
 
 // GetMysqlConnectionInfo return all db connection info
-func GetMysqlConnectionInfo(user string, password string, sock string, dbname string) (map[string]*DBConnectionInfo, error) {
-	str := fmt.Sprintf("%s:%s@unix(%s)/%s", user, password, sock, dbname)
+func GetMysqlConnectionInfo(user string, password string, sock string) (map[string]*DBConnectionInfo, error) {
+	str := fmt.Sprintf("%s:%s@unix(%s)/", user, password, sock)
 	db, err := sql.Open(mysql, str)
 	if err != nil {
 		return nil, err

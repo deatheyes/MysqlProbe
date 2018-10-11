@@ -85,12 +85,9 @@ func main() {
 		if len(conf.Watcher.Sock) == 0 {
 			conf.Watcher.Sock = "/tmp/mysql.sock"
 		}
-		if len(conf.Watcher.DBname) == 0 {
-			conf.Watcher.DBname = "test"
-		}
 
-		glog.Infof("run watcher, uname:%v sock: %v dbname: %v", conf.Watcher.Uname, conf.Watcher.Sock, conf.Watcher.DBname)
-		w := util.NewConnectionWatcher(conf.Watcher.Uname, conf.Watcher.Password, conf.Watcher.Sock, conf.Watcher.DBname)
+		glog.Infof("run watcher, uname:%v sock: %v", conf.Watcher.Uname, conf.Watcher.Sock)
+		w := util.NewConnectionWatcher(conf.Watcher.Uname, conf.Watcher.Password, conf.Watcher.Sock)
 		// probe all ports is prohibited
 		if conf.Probe.Port == 0 {
 			glog.Fatal("start probe failed, no probe port specified")
