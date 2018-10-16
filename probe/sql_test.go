@@ -14,7 +14,7 @@ func TestTransfrom(t *testing.T) {
 	}
 
 	template := generateQuery(stmt, true)
-	want := "select * from t where a = ? and b in (?, ?, ?)"
+	want := "select * from t where a = ? and b in ?"
 	if template != want {
 		t.Errorf("unexpected result, template: %v , want: %v", template, want)
 	}

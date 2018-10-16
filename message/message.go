@@ -3,24 +3,9 @@ package message
 import (
 	"encoding/json"
 	"strconv"
-	"sync"
 
 	"github.com/deatheyes/MysqlProbe/util"
 )
-
-var messageFree = sync.Pool{
-	New: func() interface{} { return &Message{} },
-}
-
-// GetMessage reuse or create a new Message
-func GetMessage() *Message {
-	return messageFree.Get().(*Message)
-}
-
-// PutMessage collect Message to reuse
-func PutMessage(m *Message) {
-	messageFree.Put(m)
-}
 
 // reponse status
 const (
@@ -289,7 +274,6 @@ func (s *AssemblySummary) AddMessage(m *Message, slow bool) bool {
 // Report group captured info by DB
 type Report struct {
 	DB       map[string]*AssemblySummary
-	messages []*Message
 }
 
 // NewReport create a Report object
@@ -332,7 +316,6 @@ func (r *Report) AddMessage(m *Message, slow bool) bool {
 		d = newAssemblySummary()
 		r.DB[m.DB] = d
 	}
-	r.messages = append(r.messages, m)
 	return d.AddMessage(m, slow)
 }
 
@@ -356,9 +339,5 @@ func EncodeReportToBytes(r *Report) ([]byte, error) {
 
 // Reset collect Messages to reuse
 func (r *Report) Reset() {
-	for _, m := range r.messages {
-		messageFree.Put(m)
-	}
 	r.DB = make(map[string]*AssemblySummary)
-	r.messages = r.messages[:0]
 }

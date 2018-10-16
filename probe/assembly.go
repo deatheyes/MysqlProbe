@@ -154,7 +154,7 @@ func (s *MysqlStream) run() {
 
 				// reuse message not sent
 				if msg == nil {
-					msg = message.GetMessage()
+					msg = &message.Message{}
 				}
 				// parse request and build message
 				msg.TimestampReq = packet.Metadata().Timestamp.UnixNano()
