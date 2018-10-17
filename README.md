@@ -69,7 +69,6 @@ The configuration is a yaml file:
 	watcher:                     # watcher is responsible for cache and refresh map of dbname and connection
 	  uname: test                # user name for login mysql
 	  passward: test             # passward to login mysql
-	  socket: /tmp/mysql.scoket  # mysql address
 	websocket:              # webscoket config for client and server
 	  writetimeoutms: 1000  # websocket write timeout(ms)
 	  pingtimeouts: 30      # webscoket ping period(s)
@@ -111,8 +110,6 @@ Compared with the websocket server in **Global Configuation**, **Pusher** is a o
 ### Watcher
 
 Watcher is the module responsible for building map from connection to db. It needs Mysql authority to run 'show processlist'.
-
-* sock: Mysql unix domain sock path.
 
 ## Output
 Data collected from slave or master will be reported in form of json compressed by snappy. The report contains statistical items:

@@ -62,7 +62,7 @@ func (p *Probe) Init() error {
 		item := fmt.Sprintf("(src host %v and src port %v) or (dst host %v and dst port %v)", h, p.port, h, p.port)
 		slice = append(slice, item)
 	}
-	p.filter = fmt.Sprintf("tcp and (%v)", strings.Join(slice, " or "))
+	p.filter = fmt.Sprintf("tcp and dst port not 127.0.0.1 and (%v)", strings.Join(slice, " or "))
 	if p.workerNum <= 0 {
 		p.workerNum = 1
 	}

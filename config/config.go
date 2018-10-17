@@ -49,7 +49,6 @@ type Pusher struct {
 type ConnectionWatcher struct {
 	Uname    string `yaml:"uname"`
 	Password string `yaml:"password"`
-	Sock     string `yaml:"sock"`
 }
 
 // Websocket is the config of websocket client and server
