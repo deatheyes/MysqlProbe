@@ -142,7 +142,7 @@ func (s *MysqlStream) run() {
 				}
 
 				// filter
-				if basePacket.Seq() != 0 {
+				if basePacket.Seq() != mysqlReqSeq {
 					glog.V(8).Infof("[%v] skip unconcerned packet %v", s.name, tcp.Payload)
 					continue
 				}
@@ -197,7 +197,7 @@ func (s *MysqlStream) run() {
 					continue
 				}
 
-				if basePacket.Seq() == 0 {
+				if basePacket.Seq() == mysqlReqSeq {
 					handshake = true
 					continue
 				}
@@ -208,7 +208,7 @@ func (s *MysqlStream) run() {
 				}
 
 				// filter
-				if basePacket.Seq() != 1 {
+				if basePacket.Seq() != mysqlRspSeq {
 					glog.V(8).Infof("[%v] skip unconcerned packet %v", s.name, tcp.Payload)
 					continue
 				}

@@ -78,3 +78,9 @@ const (
 	streamExpiration = 30 * time.Second // empty stream expiration
 	unknowDbName     = "unknown"        // unkonwn db name
 )
+
+// assembly
+const (
+	mysqlReqSeq = 0 // mysql request sequence
+	mysqlRspSeq = 1 // mysql response sequence
+)
