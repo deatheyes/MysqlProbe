@@ -54,12 +54,12 @@ master 及 slave 上均存在的接口:
 yaml 格式的配置文件:
 
         slave: true           # 是否以 slave 模式运行。在 gossip 集群中所有非 slave 节点最初都会以 master 模式运行。
-        serverport: 8667      # websocket 端口
-        interval: 1           # 数据汇报周期(s)， slave 和 master 会以该周期通过 websocket 端口以及 pusher 汇报数据。
+        serverport: 8667      # websocket 端口。
+        interval: 1           # 数据汇报周期(s)，slave 和 master 会按该周期通过 '/collector' 及 pusher 以 websocket 协议汇报数据。
         slowthresholdms: 100  # 慢查询阈值，响应时间超过该值的请求都会标记为慢查询。
         cluster:
           gossip: true   # 是否以 gossip 模式启动。
-          group: test    # 集群名
+          group: test    # 集群名。
           port: 0        # gossip 端口，0 为自动选择。
         probe:
           device: lo0,en0  # 需要监控的设备以 ',' 分隔，仅对 slave 生效。
@@ -70,21 +70,21 @@ yaml 格式的配置文件:
           servers: 127.0.0.1:8668,127.0.0.1:8669 # 以 ',' 分隔的服务节点，pusher 会从中选择一个推送数据，websocket 协议。
           path: websocket                        # 服务节点的 websocket 路径。
           preconnect: true                       # 是否提前创建连接。
-        watcher:                     # watcher 用于缓存、更新数据库名与连接信息，通过 127.0.0.1 连接本地MySQL。
+        watcher:                     # watcher 用于缓存、更新数据库名与连接信息，通过 127.0.0.1 连接本地 MySQL。
           uname: test                # MySQL 用户名。
           passward: test             # MySQL 用户密码。
-        websocket:              # webscoket 配置
-          writetimeoutms: 1000  # websocket 写超时(ms)
-          pingtimeouts: 30      # webscoket ping 超时(s)
-          reconnectperiods: 10  # websocket 连接重建等待时间(s)
-          maxmessagesize: 16384 # websocket 最大消息体(k)
+        websocket:              # webscoket 配置。
+          writetimeoutms: 1000  # 写超时(ms)。
+          pingtimeouts: 30      # ping 超时(s)。
+          reconnectperiods: 10  # 连接重建等待时间(s)。
+          maxmessagesize: 16384 # 最大消息体(k)。
 
 ### 全局配置
 
 * slave: 节点角色。
 * serverport: 服务端口。数据会通过 '/collector' 接口推送给所有连接的客户端。
-* interval: 数据推送周期(s).
-* slowthresholdms: 慢查询阈值(ms).
+* interval: 数据推送周期(s)。
+* slowthresholdms: 慢查询阈值(ms)。
 
 ### 集群配置(cluster)
 
@@ -100,12 +100,12 @@ yaml 格式的配置文件:
 
 * device: 需要监控的设备，多个设备以 ',' 分隔。
 * port: Mysql 端口，目前仅支持配置一个。
-* snappylength: libpcap 的快照缓冲区大小。如果不确定操作系统对 libpcap 的支持程度，建议设置为 0。参考 **Note** 获取更多相关信息。
+* snappylength: libpcap 的快照缓冲区大小，如果不确定操作系统对 libpcap 的支持程度，建议设置为 0。参考 **注意事项** 获取更多相关信息。
 * workers: probe 中用于处理采集数据的协程数目。
 
 ### 推送器(pusher)
 
-**pusher** 是一个可选模块，相较于全局配置中的 '/collector' 接口, 它会将数据推送给其中一个下游节点。利用它可以制定集群, 例如将其下游设置为数据处理的 proxy 集群，proxy 集群完成数据清洗后再导入存储层、数据挖掘、机器学习等系统。
+**pusher** 是一个可选模块，相较于全局配置中的 '/collector' 接口，它会将数据推送给其中一个下游节点。利用它可以制定集群，例如将其下游设置为数据处理的 proxy 集群，proxy 集群完成数据清洗后再导入存储层、数据挖掘、机器学习等系统。
 
 * servers: 下游服务组，多个节点间以 ',' 分隔。
 * path: websocket 路径。
