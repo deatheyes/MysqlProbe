@@ -1,5 +1,7 @@
+#### README: [中文](README_CN.md)
+
 # Mysql Probe
-A distributed mysql packets capture and report system inspired by [vividcortex](https://www.vividcortex.com/) and [linkedin blog](https://engineering.linkedin.com/blog/2017/09/query-analyzer--a-tool-for-analyzing-mysql-queries-without-overh)
+A distributed MySQL packets capture and report system inspired by [vividcortex](https://www.vividcortex.com/) and [linkedin blog](https://engineering.linkedin.com/blog/2017/09/query-analyzer--a-tool-for-analyzing-mysql-queries-without-overh)
 
 ## Modules
 There is only one component which could run as three mode:
@@ -8,7 +10,7 @@ There is only one component which could run as three mode:
 * standby
 
 ### Slave
-Slave run at the same machine with mysql. A probe will be started to capture the mysql query infos, such as sql, error and execution latency.
+Slave run at the same machine with MySQL. A probe will be started to capture the MySQL query infos, such as SQL, error and execution latency. This is the base component which could run without the support of the others.
 
 ### Master
 Master is responsible for collecting infos from slaves. Aggregated data will be reported by websocket.
@@ -46,6 +48,11 @@ Interfaces only availiable on master:
 * remove("/cluster/remove?addr="): A http interface to remove a slave from a master. 'addr' is the server address of the slave.
 * listnodes("/cluster/listnodes"): A http interface to list the topology of the node.
 
+### Build your own cluster
+
+In most production enviroment, it usually needs a flat and stateless aggregation layer for data processing. The tree structure of the two buildin clusters are more like test modes to some extent.
+Users could build their own production enviroment base on slave. With the help of **Pusher**, slave could report data to one member of a group of servers which could be the data processing layer.
+
 ## Configuration
 The configuration is a yaml file:
 
@@ -67,8 +74,8 @@ The configuration is a yaml file:
 	  path: websocket                        # websocket path
 	  preconnect: true                       # create connection to all servers
 	watcher:                     # watcher is responsible for cache and refresh map of dbname and connection
-	  uname: test                # user name for login mysql
-	  passward: test             # passward to login mysql
+	  uname: test                # user name for login MySQL
+	  passward: test             # passward to login MySQL
 	websocket:              # webscoket config for client and server
 	  writetimeoutms: 1000  # websocket write timeout(ms)
 	  pingtimeouts: 30      # webscoket ping period(s)
@@ -92,10 +99,10 @@ This is an optional configuration. By default, gossip will be utilized. If you d
 
 ### Probe
 
-Most of configurations of this section ralate to **libpcap**. Only slave node creates probes. Obviously, slave must be deployed at the same machine with Mysql.
+Most of configurations of this section ralate to **libpcap**. Only slave node creates probes. Obviously, slave must be deployed at the same machine with MySQL.
 
 * device: One or multiple interfaces to probe, splited by ','.
-* port: Mysql port to probe. Single port supported currently.
+* port: MySQL port to probe. Single port supported currently.
 * snappylength: Snappy buffer length of the probe. It is suggested to be set to 0 or left aside if you don't know how your system supports this argument. See **Note** for more information.
 * workers: Number of workers to process probe data. Probe dispatchs tcp packets to workers by connections.
 
@@ -109,12 +116,12 @@ Compared with the websocket server in **Global Configuation**, **Pusher** is a o
 
 ### Watcher
 
-Watcher is the module responsible for building map from connection to db. It needs Mysql authority to run 'show processlist'.
+Watcher is the module responsible for building map from connection to db. It needs MySQL authority to run 'show processlist'.
 
 ## Output
 Data collected from slave or master will be reported in form of json compressed by snappy. The report contains statistical items:
 
-* sql template: A sql template is a sql like text without constant condition value. eg. "select * from user where name=?".
+* SQL template: A SQL template is a SQL like text without constant condition value. eg. "select * from user where name=?".
 * latency: The execution latency in microsecond.
 * timestamp: Request and response timestamps.
 * status: Wether sueecssed or not.
