@@ -129,4 +129,5 @@ Data collected from slave or master will be reported in form of json compressed 
 Detial data structure can be found in **message.go**
 
 ## Note
-* On Linux, users may come up with an error 'Activate: can't mmap rx ring: Invalid argument', please refer [here](https://stackoverflow.com/questions/11397367/issue-in-pcap-set-buffer-size) for more detail
+* On Linux, users may come up with an error 'Activate: can't mmap rx ring: Invalid argument', please refer [here](https://stackoverflow.com/questions/11397367/issue-in-pcap-set-buffer-size) for more detail.
+* It must set the device to the logic device if the machine has virtual network adapter with load balancing, or the packets captured from any physical device would be incomplete.

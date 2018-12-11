@@ -127,3 +127,4 @@ slave 或 master 的汇报数据为经过 snappy 压缩过的 json 数据，主�
 
 ## 注意事项
 * 在 Linux 环境中，可能会遇到 'Activate: can't mmap rx ring: Invalid argument' 错误， 可以参考 [这里](https://stackoverflow.com/questions/11397367/issue-in-pcap-set-buffer-size) 获取相关信息。
+* 如果存在多物理网卡负载均衡模式的逻辑网卡，须将抓包设备设置为逻辑网卡，负载均衡会导致从单一物理网卡上抓取的数据包不全。
