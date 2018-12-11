@@ -1,7 +1,7 @@
 #### README: [English](README.md)
 
 # Mysql Probe
-受 [vividcortex](https://www.vividcortex.com/) 及 [linkedin blog](https://engineering.linkedin.com/blog/2017/09/query-analyzer--a-tool-f    or-analyzing-mysql-queries-without-overh) 启发而开发的 MySQL 抓包监控系统。
+受 [vividcortex](https://www.vividcortex.com/) 及 [linkedin blog](https://engineering.linkedin.com/blog/2017/09/query-analyzer--a-tool-for-analyzing-mysql-queries-without-overh) 启发而开发的 MySQL 抓包监控系统。
 
 ## 模块
 只有一个二进制文件，允许以三种模式运行:
