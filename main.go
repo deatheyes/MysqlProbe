@@ -20,11 +20,15 @@ import (
 var (
 	configfile string
 	version    bool
+
+	// version info
+	sha1   string
+	date   string
+	branch string
 )
 
 func showVersion() {
-	// TODO: read version from file
-	fmt.Println("mysql probe 0.0.0.1 - author yanyu")
+	fmt.Printf("mysql probe - author yanyu - https://github.com/deatheyes/MysqlProbe - %s - %s - %s", branch, date, sha1)
 }
 
 func init() {
@@ -38,6 +42,7 @@ func main() {
 
 	if version {
 		showVersion()
+		return
 	}
 
 	conf, err := config.ReadFile(configfile)
@@ -45,6 +50,8 @@ func main() {
 		glog.Fatalf("load config failed: %v", err)
 		return
 	}
+
+	glog.Infof("MySQL Probe - branch: %s, date: %s, sha1: %s", branch, date, sha1)
 
 	glog.Infof("load config done: %s", string(config.ToBytes(conf)))
 	conf.Path = configfile
