@@ -68,14 +68,17 @@ func (d *Dispatcher) In() chan<- []byte {
 	return d.broadcast
 }
 
+// ProcessData of Dispatcher is empty
 func (d *Dispatcher) ProcessData(data []byte) {
 	// dispatcher don't need to read any data
 }
 
+// Register gets the register channel
 func (d *Dispatcher) Register() chan<- *Client {
 	return d.register
 }
 
+// Unregister gets the unregister channel
 func (d *Dispatcher) Unregister() chan<- *Client {
 	return d.unregister
 }

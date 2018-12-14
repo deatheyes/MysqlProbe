@@ -53,6 +53,7 @@ func (b *Broadcast) Finished() {
 	}
 }
 
+// MetaData keeps the base infomation of a node
 type MetaData struct {
 	Role       string `json:"role"`        // master, standy, probe
 	Epic       uint64 `json:"epic"`        // epic for message checking
@@ -230,6 +231,7 @@ func (d *GossipSystem) MergeRemoteState(buf []byte, join bool) {
 
 }
 
+// OnRoleChanged is a callback to process nodes' role changed
 func (d *GossipSystem) OnRoleChanged(oldRole, newRole string) {
 	glog.V(5).Infof("my role change form %v to %v", oldRole, newRole)
 	switch newRole {
@@ -270,6 +272,7 @@ func (d *GossipSystem) checkPromotion(meta *MetaData, node *memberlist.Node) {
 
 // event delegate
 
+// NotifyJoin is called when a node join the cluster
 func (d *GossipSystem) NotifyJoin(node *memberlist.Node) {
 	if node.Name == d.name {
 		return
@@ -295,6 +298,7 @@ func (d *GossipSystem) NotifyJoin(node *memberlist.Node) {
 	go d.writeSeeds()
 }
 
+// NotifyUpdate is called when a node change its gossip message
 func (d *GossipSystem) NotifyUpdate(node *memberlist.Node) {
 	meta := &MetaData{}
 	if err := json.Unmarshal(node.Meta, meta); err != nil {
@@ -309,6 +313,7 @@ func (d *GossipSystem) NotifyUpdate(node *memberlist.Node) {
 	// currently, role could not be switched between slave and master|standby.
 }
 
+// NotifyLeave is called when a node leave the gossip cluster
 func (d *GossipSystem) NotifyLeave(node *memberlist.Node) {
 	meta := &MetaData{}
 	if err := json.Unmarshal(node.Meta, meta); err != nil {
@@ -339,6 +344,7 @@ func (d *GossipSystem) NotifyLeave(node *memberlist.Node) {
 	go d.writeSeeds()
 }
 
+// NotifyAlive is a interface called by the heart beat scheme of memberlist
 func (d *GossipSystem) NotifyAlive(peer *memberlist.Node) error {
 	meta := &MetaData{}
 	if err := json.Unmarshal(peer.Meta, meta); err != nil {
@@ -356,6 +362,7 @@ func (d *GossipSystem) NotifyAlive(peer *memberlist.Node) error {
 	return nil
 }
 
+// Join add a node specified by 'addr' into cluster
 func (d *GossipSystem) Join(addr string) error {
 	if _, err := d.list.Join([]string{addr}); err != nil {
 		return err
@@ -365,6 +372,7 @@ func (d *GossipSystem) Join(addr string) error {
 
 var leavetimeout = 10 * time.Second
 
+// Leave removes current node from cluster
 func (d *GossipSystem) Leave() error {
 	if err := d.list.Leave(leavetimeout); err != nil {
 		return err
@@ -372,16 +380,18 @@ func (d *GossipSystem) Leave() error {
 	return nil
 }
 
+// Remove is not supported in gossip system
 func (d *GossipSystem) Remove(addr string) error {
 	return errors.New("gossip system don't support this interface")
 }
 
+// ListNodes shows cluster nodes info
 func (d *GossipSystem) ListNodes() ([]byte, error) {
 	nodes := []*Node{}
 	for _, m := range d.list.Members() {
 		meta := &MetaData{}
 		if err := json.Unmarshal(m.Meta, meta); err != nil {
-			glog.Warningf("unmarshal meta failed: %v")
+			glog.Warningf("unmarshal meta failed: %v", err)
 			continue
 		}
 		nodes = append(nodes, &Node{Name: m.Name, IP: m.Addr.String(), GossipPort: uint16(m.Port), Meta: meta})
@@ -394,6 +404,7 @@ func (d *GossipSystem) ListNodes() ([]byte, error) {
 	return data, nil
 }
 
+// ConfigUpdate updates a key-value configuration
 func (d *GossipSystem) ConfigUpdate(key string, val string) error {
 	switch key {
 	case "report_period_ms":
@@ -464,6 +475,7 @@ func (d *StaticSystem) addNodeByAddr(addr string) error {
 	return nil
 }
 
+// Run starts the StaticSystem
 func (d *StaticSystem) Run() {
 	// slaves don't need the seeds
 	if d.role == NodeRoleSlave {
@@ -501,12 +513,14 @@ func (d *StaticSystem) writeSeeds() {
 	glog.V(7).Infof("write seed to %v done", d.seedsFilePath)
 }
 
-var NotMasterError = errors.New("not master")
+// ErrNotMaster returned when the node is not master
+var ErrNotMaster = errors.New("not master")
 
+// Join adds a node specified by 'addr' to current cluster
 func (d *StaticSystem) Join(addr string) error {
 	// only master could join slave
 	if d.role != NodeRoleMaster {
-		return NotMasterError
+		return ErrNotMaster
 	}
 
 	d.Lock()
@@ -515,9 +529,10 @@ func (d *StaticSystem) Join(addr string) error {
 	return d.addNodeByAddr(addr)
 }
 
+// Leave remove current node from its cluster
 func (d *StaticSystem) Leave() error {
 	if d.role != NodeRoleMaster {
-		return NotMasterError
+		return ErrNotMaster
 	}
 
 	d.Lock()
@@ -529,10 +544,11 @@ func (d *StaticSystem) Leave() error {
 	return nil
 }
 
+// Remove delete a node specified by 'addr' from current cluster
 func (d *StaticSystem) Remove(addr string) error {
 	// only master could remove slave
 	if d.role != NodeRoleMaster {
-		return NotMasterError
+		return ErrNotMaster
 	}
 
 	d.Lock()
@@ -550,7 +566,7 @@ func (d *StaticSystem) Remove(addr string) error {
 // ListNodes show cluster topology
 func (d *StaticSystem) ListNodes() ([]byte, error) {
 	if d.role != NodeRoleMaster {
-		return nil, NotMasterError
+		return nil, ErrNotMaster
 	}
 
 	d.Lock()
@@ -623,7 +639,7 @@ func serveConfigUpdate(d DistributedSystem, w http.ResponseWriter, r *http.Reque
 	val := r.Form.Get(key)
 
 	if err := d.ConfigUpdate(key, val); err != nil {
-		glog.Warning("update config failed, key: %v val: %v err: %v", key, val, err)
+		glog.Warningf("update config failed, key: %v val: %v err: %v", key, val, err)
 		http.Error(w, err.Error(), 500)
 		return
 	}

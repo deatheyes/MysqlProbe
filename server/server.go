@@ -70,14 +70,17 @@ func NewServer(config *config.Config) *Server {
 	return s
 }
 
+// Collector get the current instance of Collector
 func (s *Server) Collector() *Collector {
 	return s.collector
 }
 
+// Dispatcher get the current instance of Dispatcher
 func (s *Server) Dispatcher() *Dispatcher {
 	return s.dispatcher
 }
 
+// Run start the Server
 func (s *Server) Run() {
 	s.distributedSystem.Run()
 	go s.dispatcher.Run()
