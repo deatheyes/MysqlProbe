@@ -121,7 +121,7 @@ Watcher is the module responsible for building map from connection to db. It nee
 ## Output
 Data collected from slave or master will be reported in form of json compressed by snappy. The report contains statistical items:
 
-* SQL template: A SQL template is a SQL like text without constant condition value. eg. "select * from user where name=?".
+* SQL template: A SQL template is a SQL like text without constant condition value. eg. "select * from user where name=?". **SQL template is reported periodically as it is a wast of io and storage to transport and store these long strings. Aggregation layer should cache the Key and SQL template mapping, for example, in Redis or Memcached.**
 * latency: The execution latency in microsecond.
 * timestamp: Request and response timestamps.
 * status: Wether sueecssed or not.
