@@ -8,6 +8,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	LRUCache "github.com/hashicorp/golang-lru"
 
 	"github.com/deatheyes/MysqlProbe/message"
 	"github.com/deatheyes/MysqlProbe/util"
@@ -40,35 +41,11 @@ type MysqlStream struct {
 	in         chan gopacket.Packet // input channel
 	dbname     string               // dbname get from handshake response
 	uname      string               // uname get from handshake response
+	cache      *LRUCache.Cache      // lru cache of prepare statment
 }
 
-/*var streamFree = sync.Pool{
-	New: func() interface{} {
-		s := &MysqlStream{
-			closed: false,
-			in:     make(chan gopacket.Packet, inputQueueLength),
-			stop:   make(chan struct{}),
-		}
-		go s.run()
-		return s
-	},
-}*/
-
-/*func newMysqlStream(assembly *Assembly, localIP string, localPort string, clientIP string, clientPort string, key Key) *MysqlStream {
-	s := streamFree.Get().(*MysqlStream)
-	s.assembly = assembly
-	s.key = key
-	s.localIP = localIP
-	s.localPort = localPort
-	s.clientIP = clientIP
-	s.clientPort = clientPort
-	s.name = fmt.Sprintf("%v-%v", assembly.wname, key)
-	s.closed = false
-	s.lastSeen = time.Now()
-	return s
-}*/
-
 func newMysqlStream(assembly *Assembly, localIP string, localPort uint16, clientIP string, clientPort uint16, key Key) *MysqlStream {
+	c, _ := LRUCache.New(lruCacheSize)
 	s := &MysqlStream{
 		assembly:   assembly,
 		key:        key,
@@ -80,6 +57,7 @@ func newMysqlStream(assembly *Assembly, localIP string, localPort uint16, client
 		closed:     false,
 		stop:       make(chan struct{}),
 		in:         make(chan gopacket.Packet, inputQueueLength),
+		cache:      c,
 	}
 	go s.run()
 	return s
@@ -96,8 +74,7 @@ func (s *MysqlStream) run() {
 	basePacket := &MysqlBasePacket{}
 	reqPacket := &MysqlRequestPacket{}
 	rspPacket := &MysqlResponsePacket{}
-	stmtmap := make(map[uint32]string) // map to register the statement
-	waitting := false                  // if there is a request packet parsed
+	waitting := false // if there is a request packet parsed
 	var msg *message.Message
 	var err error
 	handshake := false
@@ -122,7 +99,7 @@ func (s *MysqlStream) run() {
 				}
 
 				// parse handshake response
-				if handshake && basePacket.Seq() == 1 {
+				if handshake && basePacket.Seq() == mysqlRspSeq {
 					// this packet should be a handshake response
 					uname, dbname, err := basePacket.parseHandShakeResponse()
 					if err != nil {
@@ -133,8 +110,8 @@ func (s *MysqlStream) run() {
 						s.uname = uname
 						s.dbname = dbname
 						waitting = false
-						if len(stmtmap) > 0 {
-							stmtmap = make(map[uint32]string)
+						if s.cache.Len() > 0 {
+							s.cache.Purge()
 						}
 						handshake = false
 					}
@@ -158,24 +135,43 @@ func (s *MysqlStream) run() {
 				}
 				// parse request and build message
 				msg.TimestampReq = packet.Metadata().Timestamp.UnixNano()
+				msg.UnknownExec = false
 				switch reqPacket.cmd {
 				case comQuery:
-					// this is a raw sql query
-					msg.SQL = generateQuery(reqPacket.Stmt(), true)
-					msg.Raw = reqPacket.SQL()
-					glog.V(6).Infof("[%v] [query] sql: %v", s.name, reqPacket.SQL())
+					switch reqPacket.queryType {
+					case queryNormal:
+						// this is a raw sql query
+						msg.SQL = generateQuery(reqPacket.Stmt(), true)
+						msg.Raw = reqPacket.SQL()
+						glog.V(6).Infof("[%v] [query][normal] sql: %v", s.name, reqPacket.SQL())
+					case queryPrepare:
+						msg.SQL = reqPacket.SQL()
+						msg.Raw = ""
+						glog.V(6).Infof("[%v] [query][prepare] name: %v, sql: %v", s.name, reqPacket.queryName, msg.SQL)
+					case queryExecute:
+						stmtName := reqPacket.queryName
+						if v, ok := s.cache.Get(stmtName); !ok {
+							msg.UnknownExec = true
+							glog.V(5).Infof("[%v] [query][execute] no corresponding local statement found, stmtName: %v", s.name, stmtName)
+						} else {
+							msg.SQL = v.(string)
+							msg.Raw = ""
+							glog.V(6).Infof("[%v] [query][execute] stmtName: %v, sql: %v", s.name, stmtName, msg.SQL)
+						}
+					}
 				case comStmtPrepare:
 					// the statement will be registered if processed OK
 					glog.V(6).Infof("[%v] [prepare] sql: %v", s.name, reqPacket.SQL())
 				case comStmtExecute:
 					stmtID := reqPacket.stmtID
-					if _, ok := stmtmap[stmtID]; !ok {
+					if v, ok := s.cache.Get(stmtID); !ok {
 						// no statement, the corresponding prepare request has not been captured.
+						msg.UnknownExec = true
 						glog.V(5).Infof("[%v] [execute] no corresponding local statement found, stmtID: %v", s.name, stmtID)
 					} else {
-						msg.SQL = stmtmap[stmtID]
+						msg.SQL = v.(string)
 						msg.Raw = ""
-						glog.V(6).Infof("[%v] [execute] stmtID: %v, sql: %v", s.name, stmtID, stmtmap[stmtID])
+						glog.V(6).Infof("[%v] [execute] stmtID: %v, sql: %v", s.name, stmtID, msg.SQL)
 					}
 				case comInitDB:
 					glog.V(6).Infof("[%v] [init db] dbname: %v", s.name, reqPacket.dbname)
@@ -226,13 +222,22 @@ func (s *MysqlStream) run() {
 					msg.Err = false
 					msg.AffectRows = rspPacket.affectedRows
 					msg.ServerStatus = rspPacket.status
-					// if is a prepare request, register the sql.
-					if reqPacket.CMD() == comStmtPrepare {
+					switch reqPacket.CMD() {
+					case comQuery:
+						// if is a prepare query, register the SQL.
+						if reqPacket.queryType == queryPrepare {
+							s.cache.Remove(reqPacket.queryName)
+							s.cache.Add(reqPacket.queryName, reqPacket.SQL())
+							glog.V(6).Infof("[%v] [query][prepare] response OK, stmtName: %v, sql: %v", s.name, reqPacket.queryName, reqPacket.SQL())
+						}
+					case comStmtPrepare:
+						// register the prepare statement.
+						s.cache.Remove(rspPacket.stmtID)
+						s.cache.Add(rspPacket.stmtID, reqPacket.SQL())
 						glog.V(6).Infof("[%v] [prepare] response OK, stmtID: %v, sql: %v", s.name, rspPacket.stmtID, reqPacket.SQL())
-						stmtmap[rspPacket.stmtID] = reqPacket.SQL()
-					} else if reqPacket.CMD() == comInitDB {
-						glog.V(6).Infof("[%v] [init db] response OK, dbname: %v", s.name, reqPacket.dbname)
+					case comInitDB:
 						s.dbname = reqPacket.dbname
+						glog.V(6).Infof("[%v] [init db] response OK, dbname: %v", s.name, reqPacket.dbname)
 					}
 				case iERR:
 					msg.Err = true
@@ -247,7 +252,7 @@ func (s *MysqlStream) run() {
 				// don't report those message without SQL.
 				// there is no SQL in prepare message.
 				// need more precise filter about control command such as START, END.
-				if len(msg.SQL) > 5 {
+				if (len(msg.SQL) > 5 || msg.UnknownExec) && msg.Latency < maxSpan {
 					// fill client and server info
 					msg.ServerIP = s.localIP
 					msg.ServerPort = s.localPort
@@ -265,7 +270,7 @@ func (s *MysqlStream) run() {
 							msg.DB = unknowDbName
 						}
 					}
-					msg.AssemblyKey = msg.AssemblyHashKey()
+					msg.AssemblyKey, _, _ = msg.AssemblyHashKey()
 
 					glog.V(6).Infof("[%v] mysql query parsed done: %v", s.name, msg.SQL)
 
@@ -326,13 +331,17 @@ func (a *Assembly) Assemble(packet gopacket.Packet) {
 // CloseOlderThan remove those streams expired and return the number of them
 func (a *Assembly) CloseOlderThan(t time.Time) int {
 	count := 0
+	packetNum := 0
+	cacheItemNum := 0
 	for k, v := range a.streamMap {
 		if v.lastSeen.Before(t) {
 			count++
 			v.close()
 			delete(a.streamMap, k)
-			//streamFree.Put(v)
+			packetNum += len(v.in)
+			cacheItemNum += v.cache.Len()
 		}
 	}
+	glog.V(3).Infof("[%v] packets: %d, cache items: %d", a.wname, packetNum, cacheItemNum)
 	return count
 }

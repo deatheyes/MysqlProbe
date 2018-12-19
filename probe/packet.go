@@ -51,12 +51,14 @@ func (p *MysqlBasePacket) Length() int {
 
 // MysqlRequestPacket retains the infomation of query packet
 type MysqlRequestPacket struct {
-	seq    byte
-	cmd    byte
-	sql    []byte
-	stmtID uint32 // statement id of execute
-	stmt   sqlparser.Statement
-	dbname string
+	seq       byte
+	cmd       byte
+	sql       []byte
+	stmtID    uint32 // statement id of execute
+	stmt      sqlparser.Statement
+	dbname    string
+	queryType byte   // normal | prepare | execute
+	queryName string // name of prepare or execute
 }
 
 // Seq return the sequence id in head
@@ -101,7 +103,8 @@ func (p *MysqlBasePacket) ParseRequestPacket(packet *MysqlRequestPacket) error {
 	if len(p.Data) < 2 {
 		return errNotEnouthData
 	}
-
+	// clean flag
+	packet.queryType = queryNormal
 	switch p.Data[0] {
 	case comQuery:
 		stmt, err := sqlparser.Parse(string(p.Data[1:]))
@@ -110,12 +113,30 @@ func (p *MysqlBasePacket) ParseRequestPacket(packet *MysqlRequestPacket) error {
 			return errParsedFailed
 		}
 		packet.seq = p.Seq()
+		if v, ok := stmt.(*sqlparser.Prepare); ok {
+			// prepare query
+			packet.sql = []byte(GenerateSourceQuery(v.Stmt))
+			packet.queryType = queryPrepare
+			packet.queryName = GenerateSourceQuery(v.Name)
+			packet.stmt = stmt
+			packet.cmd = comQuery
+			return nil
+		}
+		if v, ok := stmt.(*sqlparser.Execute); ok {
+			// execute query
+			packet.queryType = queryExecute
+			packet.queryName = GenerateSourceQuery(v.Name)
+			packet.stmt = stmt
+			packet.cmd = comQuery
+			return nil
+		}
 		if v, ok := stmt.(*sqlparser.Use); ok {
 			// use dbname
 			packet.cmd = comInitDB
 			packet.dbname = v.DBName.String()
 			return nil
 		}
+		// normal query
 		packet.cmd = comQuery
 		packet.sql = p.Data[1:]
 		packet.stmt = stmt

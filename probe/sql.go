@@ -36,23 +36,23 @@ func templateFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 	node.Format(buf)
 }
 
-func generateQuery(stmt sqlparser.Statement, template bool) string {
+func generateQuery(node sqlparser.SQLNode, template bool) string {
 	var buff *sqlparser.TrackedBuffer
 	if template {
 		buff = sqlparser.NewTrackedBuffer(templateFormatter)
 	} else {
 		buff = sqlparser.NewTrackedBuffer(nil)
 	}
-	stmt.Format(buff)
+	node.Format(buff)
 	return buff.String()
 }
 
 // GenerateSourceQuery rebuild the query by AST
-func GenerateSourceQuery(stmt sqlparser.Statement) string {
-	return generateQuery(stmt, false)
+func GenerateSourceQuery(node sqlparser.SQLNode) string {
+	return generateQuery(node, false)
 }
 
 // GenerateTemplateQuery generate a template according to the AST
-func GenerateTemplateQuery(stmt sqlparser.Statement) string {
-	return generateQuery(stmt, true)
+func GenerateTemplateQuery(node sqlparser.SQLNode) string {
+	return generateQuery(node, true)
 }

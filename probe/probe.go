@@ -1,10 +1,10 @@
 // Package probe classifies the packets into stream according to network flow and transport flow.
 //                                                     stream(network1:transport1)\
-//                                                   /                             \
-//                               / hash(network flow)- stream(network2:transport1)- \
-// packet-> hash(transport flow)                                                     messages
-//                               \ hash(network flow)- stream(network3:transport2)- /
-//                                                   \                             /
+//                                                   /                              \
+//                               / hash(transport flow)- stream(network2:transport1)- \
+// packet-> hash(network flow)                                                        messages
+//                               \ hash(transport flow)- stream(network3:transport2)- /
+//                                                   \                              /
 //                                                     stream(network4:transport2)/
 //                                |               tcp assembly                   |
 package probe
@@ -62,7 +62,7 @@ func (p *Probe) Init() error {
 		item := fmt.Sprintf("(src host %v and src port %v) or (dst host %v and dst port %v)", h, p.port, h, p.port)
 		slice = append(slice, item)
 	}
-	p.filter = fmt.Sprintf("tcp and dst port not 127.0.0.1 and (%v)", strings.Join(slice, " or "))
+	p.filter = fmt.Sprintf("tcp and host not 127.0.0.1 and (%v)", strings.Join(slice, " or "))
 	if p.workerNum <= 0 {
 		p.workerNum = 1
 	}

@@ -1,12 +1,12 @@
 package util
 
 import (
-	"hash/crc32"
+	"crypto/md5"
+	"fmt"
 )
 
 // ReadLengthEncodedInteger is a length decoder
 func ReadLengthEncodedInteger(b []byte) (uint64, bool, int) {
-	// See issue #349
 	if len(b) == 0 {
 		return 0, true, 1
 	}
@@ -42,6 +42,6 @@ func ReadStatus(b []byte) uint16 {
 }
 
 // Hash return the hash code of a string
-func Hash(key string) uint32 {
-	return crc32.ChecksumIEEE([]byte(key))
+func Hash(key string) string {
+	return fmt.Sprintf("%x", md5.Sum([]byte(key)))
 }
