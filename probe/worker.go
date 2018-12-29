@@ -3,6 +3,7 @@ package probe
 import (
 	"encoding/binary"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/golang/glog"
@@ -49,7 +50,8 @@ func (w *Worker) Run() {
 		watcher:   w.owner.watcher,
 	}
 
-	ticker := time.NewTicker(streamExpiration)
+	deviation := time.Duration(rand.Intn(cleanDeviation)) * time.Second
+	ticker := time.NewTicker(streamExpiration + deviation)
 	defer ticker.Stop()
 
 	glog.Infof("[%v] initilization done, stream expiration: %v", w.name, streamExpiration)

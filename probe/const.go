@@ -83,6 +83,7 @@ const (
 const (
 	inputQueueLength = 2000              // stream input queue length
 	streamExpiration = 150 * time.Second // empty stream expiration
+	cleanDeviation   = 10                // clean deviation in case of IO congestion
 	unknowDbName     = "unknown"         // unkonwn db name
 )
 
