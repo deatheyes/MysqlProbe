@@ -1,6 +1,7 @@
 package message
 
 import (
+	"bytes"
 	"encoding/json"
 	"sync"
 	"time"
@@ -170,13 +171,18 @@ func (s *SummaryGroup) MarshalJSON() ([]byte, error) {
 	for _, v := range s.Summary {
 		list = append(list, v)
 	}
-	return json.Marshal(list)
+
+	bf := bytes.NewBuffer([]byte{})
+	jsonEncoder := json.NewEncoder(bf)
+	jsonEncoder.SetEscapeHTML(false)
+	jsonEncoder.Encode(list)
+	return bf.Bytes(), nil
 }
 
 // UnmarshalJSON interface
 func (s *SummaryGroup) UnmarshalJSON(b []byte) error {
 	var list []*Summary
-	if err := json.Unmarshal(b, list); err != nil {
+	if err := json.Unmarshal(b, &list); err != nil {
 		return err
 	}
 
@@ -225,13 +231,18 @@ func (g *ClientSummaryGroup) MarshalJSON() ([]byte, error) {
 	for k, v := range g.ClientGroup {
 		list = append(list, &ClientSummaryUnit{IP: k, Group: v})
 	}
-	return json.Marshal(list)
+
+	bf := bytes.NewBuffer([]byte{})
+	jsonEncoder := json.NewEncoder(bf)
+	jsonEncoder.SetEscapeHTML(false)
+	jsonEncoder.Encode(list)
+	return bf.Bytes(), nil
 }
 
 // UnmarshalJSON interface
 func (g *ClientSummaryGroup) UnmarshalJSON(b []byte) error {
 	var list []*ClientSummaryUnit
-	if err := json.Unmarshal(b, list); err != nil {
+	if err := json.Unmarshal(b, &list); err != nil {
 		return err
 	}
 
@@ -323,7 +334,11 @@ func NewReport() *Report {
 
 // MarshalJSON interface
 func (r *Report) MarshalJSON() ([]byte, error) {
-	return json.Marshal(r.DB)
+	bf := bytes.NewBuffer([]byte{})
+	jsonEncoder := json.NewEncoder(bf)
+	jsonEncoder.SetEscapeHTML(false)
+	jsonEncoder.Encode(r.DB)
+	return bf.Bytes(), nil
 }
 
 // UnmarshalJSON interface
@@ -373,11 +388,7 @@ func DecodeReportFromBytes(data []byte) (*Report, error) {
 
 // EncodeReportToBytes marshal a Report to bytes
 func EncodeReportToBytes(r *Report) ([]byte, error) {
-	data, err := json.Marshal(r)
-	if err != nil {
-		return nil, err
-	}
-	return data, nil
+	return r.MarshalJSON()
 }
 
 const cacheExpiration = time.Minute * 5

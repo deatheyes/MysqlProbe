@@ -315,7 +315,7 @@ func (c *Collector) Run() {
 				if data, err := message.EncodeReportToBytes(report); err != nil {
 					glog.Warningf("[collector] encode report failed: %v", err)
 				} else {
-					glog.V(8).Infof("[collector] send report %v", data)
+					glog.V(8).Infof("[collector] send report %s", string(data))
 					// compress and report
 					dst := make([]byte, len(data))
 					c.report <- snappy.Encode(dst, data)
