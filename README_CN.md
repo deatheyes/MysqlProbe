@@ -49,6 +49,7 @@ master 及 slave 上均存在的接口:
 ### 制定自己的集群
 
 上边两种树形结构的集群更多的是实验性质，而大多数生产环境中都需要平滑且无状态的数据处理层。可以基于 slave 制定生产环境，其携带的 **pusher** 模块可以将数据推送至一组用于数据处理服务器中的某一节点。
+![image](https://github.com/deatheyes/MysqlProbe/blob/master/images/arch.png)
 
 ## 配置
 yaml 格式的配置文件:

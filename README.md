@@ -52,6 +52,7 @@ Interfaces only availiable on master:
 
 In most production enviroment, it usually needs a flat and stateless aggregation layer for data processing. The tree structure of the two buildin clusters are more like test modes to some extent.
 Users could build their own production enviroment base on slave. With the help of **Pusher**, slave could report data to one member of a group of servers which could be the data processing layer.
+![image](https://github.com/deatheyes/MysqlProbe/blob/master/images/arch.png)
 
 ## Configuration
 The configuration is a yaml file:
