@@ -13,14 +13,14 @@ func TestTransfrom(t *testing.T) {
 		t.Error(err)
 	}
 
-	template := generateQuery(stmt, true)
+	template, _ := generateQuery(stmt, true)
 	want := "select * from t where a = ? and b in ?"
 	if template != want {
 		t.Errorf("unexpected result, template: %v , want: %v", template, want)
 	}
 
 	want = query
-	result := generateQuery(stmt, false)
+	result, _ := generateQuery(stmt, false)
 	if result != want {
 		t.Errorf("unexpected result, query: %v , want: %v", result, want)
 	}

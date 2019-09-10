@@ -122,12 +122,12 @@ Watcher is the module responsible for building map from connection to db. It nee
 ## Output
 Data collected from slave or master will be reported in form of json compressed by snappy. The report contains statistical items:
 
-* SQL template: A SQL template is a SQL like text without constant condition value. eg. "select * from user where name=?". **SQL template is reported periodically as it is a wast of io and storage to transport and store these long strings. Aggregation layer should cache the Key and SQL template mapping, for example, in Redis or Memcached.**
+* SQL template: A SQL template is a SQL like text without constant condition value. eg. "select * from user where name=:v1". **SQL template is reported periodically as it is a wast of io and storage to transport and store these long strings. Aggregation layer should cache the Key and SQL template mapping, for example, in Redis or Memcached.**
 * latency: The execution latency in microsecond.
 * timestamp: Request and response timestamps.
 * status: Wether sueecssed or not.
 
-Detial data structure can be found in **message.go**
+Detail data structure can be found in **message.go**
 
 ## Note
 * On Linux, users may come up with an error 'Activate: can't mmap rx ring: Invalid argument', please refer [here](https://stackoverflow.com/questions/11397367/issue-in-pcap-set-buffer-size) for more detail.

@@ -115,9 +115,10 @@ func (p *MysqlBasePacket) ParseRequestPacket(packet *MysqlRequestPacket) error {
 		packet.seq = p.Seq()
 		if v, ok := stmt.(*sqlparser.Prepare); ok {
 			// prepare query
-			packet.sql = []byte(GenerateSourceQuery(v.Stmt))
+			sql, _ := GenerateSourceQuery(v.Stmt)
+			packet.sql = []byte(sql)
 			packet.queryType = queryPrepare
-			packet.queryName = GenerateSourceQuery(v.Name)
+			packet.queryName, _ = GenerateSourceQuery(v.Name)
 			packet.stmt = stmt
 			packet.cmd = comQuery
 			return nil
@@ -125,7 +126,7 @@ func (p *MysqlBasePacket) ParseRequestPacket(packet *MysqlRequestPacket) error {
 		if v, ok := stmt.(*sqlparser.Execute); ok {
 			// execute query
 			packet.queryType = queryExecute
-			packet.queryName = GenerateSourceQuery(v.Name)
+			packet.queryName, _ = GenerateSourceQuery(v.Name)
 			packet.stmt = stmt
 			packet.cmd = comQuery
 			return nil

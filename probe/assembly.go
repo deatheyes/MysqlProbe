@@ -141,7 +141,7 @@ func (s *MysqlStream) run() {
 					switch reqPacket.queryType {
 					case queryNormal:
 						// this is a raw sql query
-						msg.SQL = generateQuery(reqPacket.Stmt(), true)
+						msg.SQL, msg.Vars = generateQuery(reqPacket.Stmt(), true)
 						msg.Raw = reqPacket.SQL()
 						glog.V(6).Infof("[%v] [query][normal] sql: %v", s.name, reqPacket.SQL())
 					case queryPrepare:

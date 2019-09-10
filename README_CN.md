@@ -119,7 +119,7 @@ yaml 格式的配置文件:
 ## 输出
 slave 或 master 的汇报数据为经过 snappy 压缩过的 json 数据，主要包含以下信息:
 
-* SQL 模板: 经过格式化的 SQL，如 "select * from user where name=?"。**为了节省IO以及存储，SQL 模板是周期性返回的，大部分情况下只会返回 Key(MD5值)，下游聚合逻辑需要缓存 SQL 模板以及其 Key 的对应关系，可以通过 Redis 或者 Memcached 实现这部分逻辑。**
+* SQL 模板: 经过格式化的 SQL，如 "select * from user where name=:v1"。**为了节省IO以及存储，SQL 模板是周期性返回的，大部分情况下只会返回 Key(MD5值)，下游聚合逻辑需要缓存 SQL 模板以及其 Key 的对应关系，可以通过 Redis 或者 Memcached 实现这部分逻辑。**
 * 延迟: 毫秒维度的请求响应时间。
 * 时间戳: 请求、响应包被抓取的时间戳。
 * 状态: 成功、失败、响应行等。

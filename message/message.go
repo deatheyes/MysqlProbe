@@ -31,23 +31,24 @@ const sampleInterval = 10 * time.Second
 
 // Message is the info of a sql query
 type Message struct {
-	DB           string  `json:"-"`           // db name
-	SQL          string  `json:"-"`           // templated sql
-	Raw          string  `json:"c,omitempty"` // raw sql
-	Err          bool    `json:"d"`           // sql process error
-	ErrMsg       string  `json:"e,omitempty"` // sql process error message
-	Errno        uint16  `json:"f,omitempty"` // sql process error number
-	ServerStatus uint16  `json:"g"`           // server response status code
-	AffectRows   uint64  `json:"h"`           // affect rows
-	TimestampReq int64   `json:"i"`           // timestamp for request package
-	TimestampRsp int64   `json:"j"`           // timestamp for response package
-	Latency      float32 `json:"k"`           // latency in millisecond
-	ServerIP     string  `json:"-"`           // server ip
-	ServerPort   uint16  `json:"-"`           // server port
-	ClientIP     string  `json:"n"`           // client ip
-	ClientPort   uint16  `json:"-"`           // client port
-	AssemblyKey  string  `json:"-"`           // hash key for assembly
-	UnknownExec  bool    `json:"-"`           // execute command without crossponding sql
+	DB           string            `json:"-"`           // db name
+	SQL          string            `json:"-"`           // templated sql
+	Raw          string            `json:"c,omitempty"` // raw sql
+	Err          bool              `json:"d"`           // sql process error
+	ErrMsg       string            `json:"e,omitempty"` // sql process error message
+	Errno        uint16            `json:"f,omitempty"` // sql process error number
+	ServerStatus uint16            `json:"g"`           // server response status code
+	AffectRows   uint64            `json:"h"`           // affect rows
+	TimestampReq int64             `json:"i"`           // timestamp for request package
+	TimestampRsp int64             `json:"j"`           // timestamp for response package
+	Latency      float32           `json:"k"`           // latency in millisecond
+	Vars         map[string]string `json:"l,omitempty"` // Vars retrieved form Raw
+	ServerIP     string            `json:"-"`           // server ip
+	ServerPort   uint16            `json:"-"`           // server port
+	ClientIP     string            `json:"n"`           // client ip
+	ClientPort   uint16            `json:"-"`           // client port
+	AssemblyKey  string            `json:"-"`           // hash key for assembly
+	UnknownExec  bool              `json:"-"`           // execute command without crossponding sql
 }
 
 // HashKey hash(sql) for map
